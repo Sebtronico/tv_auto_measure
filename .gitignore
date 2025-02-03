@@ -243,6 +243,7 @@ $RECYCLE.BIN/
 *.msix
 *.msm
 *.msp
+*.tif
 
 # Windows shortcuts
 *.lnk
