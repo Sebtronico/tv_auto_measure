@@ -51,7 +51,7 @@ instr.write_str_with_opc('INIT') # Inicio del barrido
 filename = 'mediciones_spectrum.csv'
 
 # Tiempo total de adquisición (3 minutos)
-end_time = time.time() + 180  # 180 segundos (3 minutos)
+end_time = time.time() + 30  # 180 segundos (3 minutos)
 # interval = 
 
 # Crear y abrir el archivo CSV

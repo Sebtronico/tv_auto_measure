@@ -32,7 +32,7 @@ instr.write_str_with_opc('INIT:CONT OFF') # Encendido del modo de barrido contin
 instr.write_str_with_opc('INIT') # Inicio del barrido
 
 # Tiempo total de adquisición (3 minutos)
-end_time = time.time() + 180  # 180 segundos (3 minutos)
+end_time = time.time() + 30  # 180 segundos (3 minutos)
     
 traces = []
 

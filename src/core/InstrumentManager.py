@@ -12,6 +12,9 @@ class InstrumentManager(RsInstrument):
         Args:
             ip_address: Dirección IP del instrumento
         """
+
+        self.ip_address = ip_address
+        
         try:
             resource_string = f'TCPIP::{ip_address}::INSTR'
             if ip_address in self._first_instances:
