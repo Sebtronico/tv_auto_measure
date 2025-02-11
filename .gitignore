@@ -244,6 +244,7 @@ $RECYCLE.BIN/
 *.msm
 *.msp
 *.tif
+~$*
 
 # Windows shortcuts
 *.lnk
