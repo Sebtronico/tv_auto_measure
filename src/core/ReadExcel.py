@@ -58,19 +58,19 @@ class LeerPreingenieria:
         self.main_iterator = list(SEARCH_PRINCIPALS['Analógico'].keys()) + list(SEARCH_PRINCIPALS['Digital'].keys())
         self.addl_iterator = list(SEARCH_ADDITIONALS['Analógico'].keys()) + list(SEARCH_ADDITIONALS['Digital'].keys())
 
-
+    # Retorna la lista de municipios
     def get_municipalities(self):
         return self.main_channelization['Municipio'].tolist()
     
-
+    # Retorna el número de puntos que hay en un municipio
     def get_number_of_points(self, municipio: str):
         return self.main_coordinates[self.main_coordinates['Municipio'] == municipio]['Pto.'].max()
     
-
+    # Retorna la lista de ingenieros
     def get_engineers_list(self):
         return self.engineers['Ingeniero'].tolist()
     
-
+    # Llena el diccionario con los valores que se encuentran en la preingeniería
     @staticmethod
     def fill_dictionary(dataframe: pd.DataFrame, stations: list, indexes: int, search: dict, dictionary: dict):
         for tec in search.keys(): # Análogo o Digital
@@ -90,7 +90,7 @@ class LeerPreingenieria:
 
         return dictionary
     
-
+    # Depura el diccionario para eliminar estaciones repetidas
     @staticmethod
     def debug_dictionary(dictionary: dict):
         # Obtener todas las claves
@@ -117,6 +117,7 @@ class LeerPreingenieria:
 
         return dictionary 
     
+    # Llena el diccionario con los valores de acimut
     @staticmethod
     def fill_acimuth(municipality: str, point: int, stations: list, dataframe: pd.DataFrame, columns: dict, dictionary: dict):
         index_acimuth = dataframe.index[(dataframe['Municipio'] == municipality) & (dataframe['Pto.'] == point)].tolist()[0]
@@ -134,7 +135,7 @@ class LeerPreingenieria:
 
         return dictionary
     
-
+    # Realiza todo el proceso de creación y llenado del diccionario. 
     def get_dictionary(self, municipality: str, point: int):
         main_index = self.main_channelization.index[self.main_channelization['Municipio'] == municipality].tolist()
         addl_index = self.addl_channelization.index[self.addl_channelization['Municipio'] == municipality].tolist()
@@ -158,7 +159,7 @@ class LeerPreingenieria:
 
         return dictionary
     
-
+    # Retorna el diccionario de canales en los que hay que medir SFN.
     @staticmethod
     def get_sfn(dictionary: dict):
         digital_channels = {}
@@ -182,7 +183,7 @@ class LeerPreingenieria:
 
         return sorted_channels
     
-
+    # Actualiza el diccionario para eliminar los canales de menor potencia (obtenidos de la medición SFN).
     @staticmethod
     def update_sfn(dictionary, selection):
 
