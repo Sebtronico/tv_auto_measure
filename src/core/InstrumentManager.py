@@ -46,12 +46,3 @@ class InstrumentManager(RsInstrument):
                 self.write('SYST:DISP:UPD ON')
         except Exception as e:
             print(f'Error al verificar IDN o configurar el instrumento: {e}')
-
-
-
-if __name__ == '__main__':
-    instr1 = InstrumentManager('172.23.82.39')
-    instr2 = InstrumentManager('172.23.82.39')
-    print(instr1.idn_string)
-    print(instr1 is instr2)
-    # instr.write_str_with_opc('DISP:ZOOM:OVER BERLdpc')  # Hacer zoom a la variable BER bef. LDPC.)
