@@ -1,10 +1,9 @@
-from RsInstrument import *
+from RsInstrument import RsInstrument, ResourceError
 from typing import Dict
 
 class InstrumentManager(RsInstrument):
-    # Diccionario para almacenar la primera instancia de cada IP
     _first_instances: Dict[str, 'InstrumentManager'] = {}
-    
+
     def __init__(self, ip_address: str):
         """
         Inicializa el instrumento con la configuración personalizada.
@@ -12,29 +11,47 @@ class InstrumentManager(RsInstrument):
         Args:
             ip_address: Dirección IP del instrumento
         """
-
         self.ip_address = ip_address
-        
+        resource_options = [f'TCPIP::{ip_address}::INSTR', f'TCPIP::{ip_address}::5025::SOCKET']
+
+        for resource_string in resource_options:
+            try:
+                if ip_address in self._first_instances:
+                    # Si ya existe una instancia, reusamos la sesión ya creada con el parámetro direct_session.
+                    existing_instr = self._first_instances[ip_address]
+                    super().__init__(resource_name=resource_string, direct_session=existing_instr)
+                else:
+                    # Si es la primera conexión, creamos una nueva instancia y la guardamos en _first_instances.
+                    super().__init__(resource_name=resource_string)
+                    self._first_instances[ip_address] = self
+                break  # Sale del bucle si la conexión fue exitosa
+            except ResourceError as e:
+                print(f'Error al conectar con {resource_string}.')
+
+        # Si la instancia no está en _first_instances, significa que la conexión falló.
+        if ip_address not in self._first_instances:
+            print('No se pudo establecer conexión con el instrumento. Verifique la IP o su disponibilidad.')
+            return
+
+        # Configurar atributos personalizados
+        self.instrument_status_checking = True  # Error check after each command
+        self.visa_timeout = 10e3 
+        self.opc_timeout = 60e3  # Timeout for opc-synchronised operations
+        self.data_chunk_size = 100  # Definición del tamaño del buffer
+        self.opc_query_after_write = True
+
+        # Verificar IDN antes de escribir comandos
         try:
-            resource_string = f'TCPIP::{ip_address}::INSTR'
-            if ip_address in self._first_instances:
-                # Si ya existe una instancia, reusamos la sesión ya creada con el parámetro direct_session
-                existing_instr = self._first_instances[ip_address]
-                super().__init__(resource_name = resource_string, direct_session = existing_instr)
-            else:
-                # Si es la primera conexión
-                super().__init__(resource_name = resource_string)
-                self._first_instances[ip_address] = self
-            
-            # Configurar atributos personalizados
-            self.instrument_status_checking = True  # Error check after each command
-            self.visa_timeout = 10e3 
-            self.opc_timeout = 60e3  # Timeout for opc-synchronised operations
-            self.data_chunk_size = 100 # Definición del tamaño del buffer
-            self.opc_query_after_write = True
-            
             if self.idn_string.split(sep=',')[1] == 'ETL-3':
                 self.write('SYST:DISP:UPD ON')
-        except ResourceError as e:
-            print(e.args[0])
-            print('Error al conectar con el instrumento. \nVerifique su disponibilidad o que la IP sea correcta.')
+        except Exception as e:
+            print(f'Error al verificar IDN o configurar el instrumento: {e}')
+
+
+
+if __name__ == '__main__':
+    instr1 = InstrumentManager('172.23.82.39')
+    instr2 = InstrumentManager('172.23.82.39')
+    print(instr1.idn_string)
+    print(instr1 is instr2)
+    # instr.write_str_with_opc('DISP:ZOOM:OVER BERLdpc')  # Hacer zoom a la variable BER bef. LDPC.)
