@@ -1,15 +1,15 @@
 import pandas as pd
-from ..utils.constants import *
+from src.utils.constants import *
 
-class LeerPreingenieria:
+class ReadExcel:
     def __init__(self, filename: str):
 
         # Cargue de archivo de preingeniería
         self.filename_pre_engineering = filename
-        self.main_coordinates          = pd.read_excel(filename, sheet_name = 0, skiprows = 1)
-        self.main_channelization       = pd.read_excel(filename, sheet_name = 1, skiprows = 1)
-        self.addl_channelization = pd.read_excel(filename, sheet_name = 2, skiprows = 1)
-        self.addl_coordinates    = pd.read_excel(filename, sheet_name = 3, skiprows = 0)
+        self.main_coordinates    = pd.read_excel(filename, sheet_name = 0, skiprows = 1)
+        self.main_channelization = pd.read_excel(filename, sheet_name = 1, skiprows = 1)
+        self.addt_channelization = pd.read_excel(filename, sheet_name = 2, skiprows = 1)
+        self.addt_coordinates    = pd.read_excel(filename, sheet_name = 3, skiprows = 0)
 
         # Cargue de archivo de referencias
         self.filename_references = './src/utils/Referencias.xlsx'
@@ -23,11 +23,16 @@ class LeerPreingenieria:
         # Renombramiento de columnas, para corregir espacios en blanco
         self.main_coordinates.rename(columns={' RTVC':'RTVC'}, inplace=True)
 
-        # Separación de la columna de canal regional
-        self.main_channelization[['Estación Regional TV Analógica', 'Operador Regional']] = self.main_channelization['Estación Regional TV Analógica'].str.split(" - ", expand=True)
-        self.addl_channelization[['Estación Regional TV Analógica', 'Operador Regional']] = self.addl_channelization['Estación Regional TV Analógica'].str.split(" - ", expand=True)
+        # Corrección de valores diferentes para estaciones no asignadas.
+        self.main_channelization.replace('Asignados sin Estación', 'Asignado Sin Estación', inplace=True)
 
-        # Borra las estaciones que no tienen obligación de canalizar
+        # Separación de la columna de canal regional
+        self.separate_regional_channel(self.main_channelization, 'Estación Regional TV Analógica', 'Operador Regional')
+        self.separate_regional_channel(self.addt_channelization, 'Estación Regional TV Analógica', 'Operador Regional')
+        self.separate_regional_channel(self.addt_channelization, 'Estación 2do_CR', 'Segundo Operador Regional')
+        self.separate_regional_channel(self.addt_channelization, 'Estación TDT 2do_CR', 'Segundo Operador Regional TDT')
+
+        # Borra las estaciones que no tienen obligación de medir
         for municipality in self.municipalities:
             exception_index = self.main_coordinates.index[self.main_coordinates['Municipio'] == municipality].tolist()[0]
 
@@ -47,16 +52,16 @@ class LeerPreingenieria:
             self.main_channelization.loc[index,'Operador Regional'] = regional_channel
 
         # Corrección de valores nulos en la columna de operador regional
-        null_indexes_addl = self.addl_channelization.index[self.addl_channelization['Operador Regional'].isnull() == True].tolist()
-        for index in null_indexes_addl:
-            department = self.addl_channelization.at[index,'Departamento']
-            null_municipality_addl = self.addl_channelization.at[index,'Municipio']
-            regional_index = self.regionals.index[(self.regionals['Municipio'] == null_municipality_addl) & (self.regionals['Departamento'] == department)].tolist()[0]
+        null_indexes_addt = self.addt_channelization.index[self.addt_channelization['Operador Regional'].isnull() == True].tolist()
+        for index in null_indexes_addt:
+            department = self.addt_channelization.at[index,'Departamento']
+            null_municipality_addt = self.addt_channelization.at[index,'Municipio']
+            regional_index = self.regionals.index[(self.regionals['Municipio'] == null_municipality_addt) & (self.regionals['Departamento'] == department)].tolist()[0]
             regional_channel = self.regionals.at[regional_index, 'Operador']
-            self.addl_channelization.loc[index,'Operador Regional'] = regional_channel
+            self.addt_channelization.loc[index,'Operador Regional'] = regional_channel
 
         self.main_iterator = list(SEARCH_PRINCIPALS['Analógico'].keys()) + list(SEARCH_PRINCIPALS['Digital'].keys())
-        self.addl_iterator = list(SEARCH_ADDITIONALS['Analógico'].keys()) + list(SEARCH_ADDITIONALS['Digital'].keys())
+        self.addt_iterator = list(SEARCH_ADDITIONALS['Analógico'].keys()) + list(SEARCH_ADDITIONALS['Digital'].keys())
 
     # Retorna la lista de municipios
     def get_municipalities(self):
@@ -70,19 +75,57 @@ class LeerPreingenieria:
     def get_engineers_list(self):
         return self.engineers['Ingeniero'].tolist()
     
+    # Hace la separación de las columnas que contienen 'NombreDeLaEstación - Operador'
+    @staticmethod
+    def separate_regional_channel(dataframe: pd.DataFrame, base_column: str, regional_column: str):
+        # Aplicar una máscara para detectar las filas que contienen " - "
+        mask = dataframe[base_column].str.contains(" - ", na=False)
+
+        # Verificar si hay filas que cumplen la condición
+        if mask.any():
+            # Crear las nuevas columnas con la división
+            split_data = dataframe.loc[mask, base_column].str.split(" - ", expand=True)
+
+            # Si split_data tiene solo una columna, agregar una segunda con NaN
+            if split_data.shape[1] == 1:
+                split_data[1] = float('nan')
+
+            # Asignar los valores a las columnas
+            dataframe.loc[mask, base_column] = split_data[0]
+            dataframe.loc[mask, regional_column] = split_data[1]
+
+        # Asegurar que 'regional_column' tenga NaN donde no se hizo la división
+        dataframe.loc[~mask, regional_column] = float('nan')
+
+    
     # Llena el diccionario con los valores que se encuentran en la preingeniería
     @staticmethod
-    def fill_dictionary(dataframe: pd.DataFrame, stations: list, indexes: int, search: dict, dictionary: dict):
+    def fill_dictionary(dataframe: pd.DataFrame, stations: list, indexes: list, search: dict, dictionary: dict):
         for tec in search.keys(): # Análogo o Digital
             if tec in ['Analógico', 'Digital']:
                 for station_column in search[tec].keys(): # Estación Públicos TV Analógica
                     for service in search[tec][station_column].keys(): # C1, CI, SC
                         for index in indexes:
-                            station = dataframe.at[index, station_column].title()
+                            station = str(dataframe.at[index, station_column]).title()
+                            # Pendiente añadir lo de segundo regional
                             if search[tec][station_column][service] == 'Canal Regional':
                                 channel = dataframe.at[index, 'Operador Regional']
+
+                            elif search[tec][station_column][service] == 'Regional 2':
+                                channel = dataframe.at[index, 'Segundo Operador Regional']
+
+                            elif search[tec][station_column][service] == 'Regional 2 TDT':
+                                channel = dataframe.at[index, 'Segundo Operador Regional TDT']
+
+                            elif search[tec][station_column][service] == 'Local_1_Analógica':
+                                channel = dataframe.at[index, 'Local_1']
+
+                            elif search[tec][station_column][service] == 'Local TDT':
+                                channel = dataframe.at[index, 'Local_TDT']
+
                             else:
                                 channel = search[tec][station_column][service]
+
                             if station in stations:
                                 dictionary[station][tec].update({channel: int(dataframe.at[index, service])})
             else:
@@ -135,27 +178,57 @@ class LeerPreingenieria:
 
         return dictionary
     
+    @staticmethod
+    def clean_asigned_without_station(dictionary: dict):
+        if 'Asignado Sin Estación' not in dictionary:
+            return dictionary  # Si no existe la clave, devolvemos el diccionario sin cambios
+
+        # Obtener los datos de "Asignado Sin Estación"
+        datos_ase = dictionary['Asignado Sin Estación']
+
+        # Recopilar todos los valores de "Analógico" en las demás estaciones
+        valores_analogicos_presentes = {}
+        for estacion, info in dictionary.items():
+            if estacion != 'Asignado Sin Estación' and 'Analógico' in info:
+                for canal, numero in info['Analógico'].items():
+                    valores_analogicos_presentes[numero] = canal  # Guardamos por número de canal
+
+        # Filtrar las entradas de "Analógico" en 'Asignado Sin Estación' que ya existen en otra estación
+        if 'Analógico' in datos_ase:
+            datos_ase['Analógico'] = {
+                canal: numero for canal, numero in datos_ase['Analógico'].items()
+                if numero not in valores_analogicos_presentes
+            }
+
+        # Si después de limpiar 'Asignado Sin Estación', no quedan valores en 'Analógico' y 'Digital', eliminarlo
+        if not datos_ase['Analógico'] and not datos_ase['Digital']:
+            del dictionary['Asignado Sin Estación']
+
+        return dictionary
+
     # Realiza todo el proceso de creación y llenado del diccionario. 
     def get_dictionary(self, municipality: str, point: int):
         main_index = self.main_channelization.index[self.main_channelization['Municipio'] == municipality].tolist()
-        addl_index = self.addl_channelization.index[self.addl_channelization['Municipio'] == municipality].tolist()
+        addt_index = self.addt_channelization.index[self.addt_channelization['Municipio'] == municipality].tolist()
 
-        main_stations = [self.main_channelization.at[addl_index[0],key].title() for key in self.main_iterator if self.main_channelization.at[main_index[0],key].title() not in ['Sin Obligación', 'No Tiene']]
-        addl_stations = [self.addl_channelization.at[index,key].title() for index in addl_index for key in self.addl_iterator if self.addl_channelization.at[index,key].title() not in ['No Aplica']]
+        main_stations = [str(self.main_channelization.at[main_index[0],key]).title() for key in self.main_iterator if str(self.main_channelization.at[main_index[0],key]).title() not in ['Sin Obligación', 'No Tiene']]
+        addt_stations = [str(self.addt_channelization.at[index,key]).title() for index in addt_index for key in self.addt_iterator if str(self.addt_channelization.at[index,key]).title() not in ['No Aplica']]
 
-        stations = list(set(main_stations + addl_stations))
+        stations = list(set(main_stations + addt_stations))
 
         dictionary = {station: {'Acimuth': 0, 'Analógico': {}, 'Digital': {}} for station in stations}
 
         dictionary = self.fill_dictionary(self.main_channelization, stations, main_index, SEARCH_PRINCIPALS,  dictionary)
-        dictionary = self.fill_dictionary(self.addl_channelization, stations, addl_index, SEARCH_ADDITIONALS, dictionary)
+        dictionary = self.fill_dictionary(self.addt_channelization, stations, addt_index, SEARCH_ADDITIONALS, dictionary)
 
         dictionary = self.debug_dictionary(dictionary)
 
         stations  = list(dictionary.keys())
 
         dictionary = self.fill_acimuth(municipality, point, stations, self.main_coordinates, PRINCIPAL,  dictionary)
-        dictionary = self.fill_acimuth(municipality, point, stations, self.addl_coordinates, ADDITIONAL, dictionary)
+        dictionary = self.fill_acimuth(municipality, point, stations, self.addt_coordinates, ADDITIONAL, dictionary)
+
+        dictionary = self.clean_asigned_without_station(dictionary)
 
         return dictionary
     
@@ -201,3 +274,35 @@ class LeerPreingenieria:
                         del info['Digital'][numero]
 
         return dictionary
+
+    # Retorna la lista de estaciones que van en la hoja de 'Información Gral' del excel de post procesamiento
+    @staticmethod
+    def get_excel_station_list(dictionary: dict):
+        excel_station_list = []
+        for estacion, technology in dictionary.items():
+            if 'Digital' in technology:
+                for service in technology['Digital']:
+                    if service in ['Caracol', 'RCN']:
+                        excel_station_list.append(f"{estacion.upper()} - CCNP")
+                    else:
+                        excel_station_list.append(f"{estacion.upper()} - RTVC")
+        excel_station_list = sorted(list(set(excel_station_list)))
+        
+        return excel_station_list
+    
+
+if __name__ == '__main__':
+    filename = './templates/Preingenieria Meta.xlsx'
+    preingenieria = ReadExcel(filename)
+    dictionary = preingenieria.get_dictionary('El Dorado', 1)
+    print(dictionary)
+    print('\n')
+    # print(preingenieria.get_excel_station_list(dictionary))
+    # sfn = preingenieria.get_sfn(dictionary)
+    # print(sfn)
+    # selection = {
+    #     16: 'Boquerón De Chipaque',
+    #     17: 'El Tigre'
+    # }
+    # updated_dictionary = preingenieria.update_sfn(dictionary, selection)
+    # print(updated_dictionary)
