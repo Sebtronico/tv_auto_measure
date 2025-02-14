@@ -92,7 +92,7 @@ SEARCH_ADDITIONALS = {
         },
 
         'Estación Analógica Canal Local': {
-            'Local_1': 'Local_1_Analógica'
+            'CH_Local1': 'Local_1_Analógica'
         }
     },
 
@@ -112,7 +112,7 @@ SEARCH_ADDITIONALS = {
         },
 
         'Estación Local TDT': {
-            'Local_TDT': 'Local TDT'
+            'CH_Local TDT': 'Local TDT'
         }
     }
 }
