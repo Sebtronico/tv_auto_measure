@@ -134,3 +134,30 @@ TV_SERVICES = {
     'Telepasto':	['Telepasto'],
     'Telepacífico':	['Telepacífico HD', 'Origen Channel']
 }
+
+
+#Definición del diccionario para el procesamiento de la medición de txCheck
+txcheck_parameters = {
+    'LEVel':        [35.0,      83.75,      70, 'Level'],
+    'CFOFfset':     [30000,     0,          20, 'Carrier Freq Offset'],
+    'BROFfset':     [20.0,      0.0,        20, 'Bit Rate Offset'],
+    'MRLO':         [24.0,      43.0,       20, 'MER(L1,rms)'],
+    'MPLO':         [10.0,      28.0,       20, 'MER(L1,peak)'],
+    'MRPLp':        [24.0,      43.0,       20, 'MER(PLP,rms)'],
+    'MPPLp':        [10.0,      28.0,       20, 'MER(PLP,peak)'],
+    'ERPLp':        [4.40,      0.50,       20, 'EVM(PLP, rms)'],
+    'EPPLp':        [22.00,     2.50,       20, 'EVM(PLP, peak)'],
+    'AMPLitude':    [3.00,      0.10,       45, 'Amplitude'],
+    'PHASe':        [45.00,     0.50,       45, 'Phase'],
+    'GDELay':       [300e-9,    6e-9,       45, 'Group Delay'],
+    'IMBalance':    [2.00,      0.00,       60, 'Amplitude Imbalance'],
+    'QERRor':       [2.00,      0.00,       60, 'Quadrature Error'],
+    'CSUPpression': [15.0,      50.0,       60, 'Carrier Suppression'],
+    'BERLdpc':      [1e-2,      1e-11,      20, 'BER before LDPC'],
+    'BBCH':         [1e-5,      1e-11,      20, 'BER before BCH'],
+    'FERatio':      [1e-10,     1e-11,      20, 'BBFRAME error ratio'],
+    'ESRatio':      [10.0,      0.0,        20, 'Errored second ratio'],
+    'PERatio':      [1e-7,      1e-11,      80, 'Packet Error Ratio'],
+    'SALower':      [35.0,      53.0,       65, 'Shoulder Att Lower'],
+    'SAUPper':      [35.0,      53.0,       65, 'Shoulder Att Upper'],
+}
