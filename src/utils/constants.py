@@ -137,7 +137,7 @@ TV_SERVICES = {
 
 
 #Definición del diccionario para el procesamiento de la medición de txCheck
-txcheck_parameters = {
+TXCHECK_PARAMETERS = {
     'LEVel':        [35.0,      83.75,      70, 'Level'],
     'CFOFfset':     [30000,     0,          20, 'Carrier Freq Offset'],
     'BROFfset':     [20.0,      0.0,        20, 'Bit Rate Offset'],
