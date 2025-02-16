@@ -246,6 +246,7 @@ $RECYCLE.BIN/
 *.msp
 *.tif
 ~$*
+*Zone.Identifier
 
 # Windows shortcuts
 *.lnk
