@@ -178,33 +178,33 @@ class ReadExcel:
 
         return dictionary
     
-    @staticmethod
-    def clean_asigned_without_station(dictionary: dict):
-        if 'Asignado Sin Estación' not in dictionary:
-            return dictionary  # Si no existe la clave, devolvemos el diccionario sin cambios
+    # @staticmethod
+    # def clean_asigned_without_station(dictionary: dict):
+    #     if 'Asignado Sin Estación' not in dictionary:
+    #         return dictionary  # Si no existe la clave, devolvemos el diccionario sin cambios
 
-        # Obtener los datos de "Asignado Sin Estación"
-        datos_ase = dictionary['Asignado Sin Estación']
+    #     # Obtener los datos de "Asignado Sin Estación"
+    #     datos_ase = dictionary['Asignado Sin Estación']
 
-        # Recopilar todos los valores de "Analógico" en las demás estaciones
-        valores_analogicos_presentes = {}
-        for estacion, info in dictionary.items():
-            if estacion != 'Asignado Sin Estación' and 'Analógico' in info:
-                for canal, numero in info['Analógico'].items():
-                    valores_analogicos_presentes[numero] = canal  # Guardamos por número de canal
+    #     # Recopilar todos los valores de "Analógico" en las demás estaciones
+    #     valores_analogicos_presentes = {}
+    #     for estacion, info in dictionary.items():
+    #         if estacion != 'Asignado Sin Estación' and 'Analógico' in info:
+    #             for canal, numero in info['Analógico'].items():
+    #                 valores_analogicos_presentes[numero] = canal  # Guardamos por número de canal
 
-        # Filtrar las entradas de "Analógico" en 'Asignado Sin Estación' que ya existen en otra estación
-        if 'Analógico' in datos_ase:
-            datos_ase['Analógico'] = {
-                canal: numero for canal, numero in datos_ase['Analógico'].items()
-                if numero not in valores_analogicos_presentes
-            }
+    #     # Filtrar las entradas de "Analógico" en 'Asignado Sin Estación' que ya existen en otra estación
+    #     if 'Analógico' in datos_ase:
+    #         datos_ase['Analógico'] = {
+    #             canal: numero for canal, numero in datos_ase['Analógico'].items()
+    #             if numero not in valores_analogicos_presentes
+    #         }
 
-        # Si después de limpiar 'Asignado Sin Estación', no quedan valores en 'Analógico' y 'Digital', eliminarlo
-        if not datos_ase['Analógico'] and not datos_ase['Digital']:
-            del dictionary['Asignado Sin Estación']
+    #     # Si después de limpiar 'Asignado Sin Estación', no quedan valores en 'Analógico' y 'Digital', eliminarlo
+    #     if not datos_ase['Analógico'] and not datos_ase['Digital']:
+    #         del dictionary['Asignado Sin Estación']
 
-        return dictionary
+    #     return dictionary
 
     # Realiza todo el proceso de creación y llenado del diccionario. 
     def get_dictionary(self, municipality: str, point: int):
@@ -228,7 +228,7 @@ class ReadExcel:
         dictionary = self.fill_acimuth(municipality, point, stations, self.main_coordinates, PRINCIPAL,  dictionary)
         dictionary = self.fill_acimuth(municipality, point, stations, self.addt_coordinates, ADDITIONAL, dictionary)
 
-        dictionary = self.clean_asigned_without_station(dictionary)
+        # dictionary = self.clean_asigned_without_station(dictionary)
 
         return dictionary
     
