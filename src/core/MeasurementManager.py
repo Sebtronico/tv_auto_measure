@@ -250,8 +250,8 @@ class EtlManager(InstrumentManager):
 
     def dtv_modulation_analysis_measurement(self, channel: int, path: str):
         # Medición en la ventana 'Modulation errors'
-        self.write_str_with_opc('CONF:DTV:MEAS MERR')  # Selecciona la ventana Modulation errors
-        self.write_str_with_opc('DISP:ZOOM:MERR MRPLp') # Zoom a la ariable MER (PLP, RMS)
+        self.write_str('CONF:DTV:MEAS MERR')  # Selecciona la ventana Modulation errors
+        self.write_str('DISP:ZOOM:MERR MRPLp') # Zoom a la ariable MER (PLP, RMS)
         
         dict_merr = self.wait_for_variables('MERR', 30)
         MRPLp = round(float(dict_merr['MRPLp']), 1) if dict_merr['MRPLp'] != '---' else 'ND'
@@ -260,7 +260,7 @@ class EtlManager(InstrumentManager):
         self.get_screenshot(filename) # Toma de captura de pantalla # Toma de captura de pantalla.
 
         # Medición en la ventana de constelación.
-        self.write_str_with_opc('CONF:DTV:MEAS CONS')
+        self.write_str('CONF:DTV:MEAS CONS')
         time.sleep(5)
         try:
             cons = MODULATION_TABLE[self.query_with_opc('CALC:DTV:RES:L1Post? DPLP').split(sep=',')[1]] # Obtención de la variable modulación.
@@ -275,7 +275,7 @@ class EtlManager(InstrumentManager):
         self.get_screenshot(filename) # Toma de captura de pantalla # Toma de captura de pantalla.
 
         # Medición en la ventana MER vs Carrier.
-        self.write_str_with_opc('CONF:DTV:MEAS MERFrequency')
+        self.write_str('CONF:DTV:MEAS MERFrequency')
         
         t = time.time()
         while True:
@@ -290,7 +290,7 @@ class EtlManager(InstrumentManager):
         filename = f'{path}/{TV_TABLE[channel]}_009'
         self.get_screenshot(filename) # Toma de captura de pantalla # Toma de captura de pantalla.
 
-        self.write_str_with_opc('CONF:DTV:MEAS CCDF')  # Selecciona la ventana Modulation errors
+        self.write_str('CONF:DTV:MEAS CCDF')  # Selecciona la ventana Modulation errors
         time.sleep(2)
         
         filename = f'{path}/{TV_TABLE[channel]}_012'
@@ -302,8 +302,8 @@ class EtlManager(InstrumentManager):
     def dtv_channel_analysis_measurement(self, channel: int, path: str, MRPLp, BERLdpc):
         
         # Medición la ventana Echo Pattern.
-        self.write_str_with_opc('CONF:DTV:MEAS EPATtern')
-        self.write_str_with_opc('DISP:LIST:STATE OFF') # Desactiva la vista de la lista.
+        self.write_str('CONF:DTV:MEAS EPATtern')
+        self.write_str('DISP:LIST:STATE OFF') # Desactiva la vista de la lista.
 
         t = time.time()
         while True:
@@ -320,18 +320,18 @@ class EtlManager(InstrumentManager):
         filename = f'{path}/{TV_TABLE[channel]}_007'
         self.get_screenshot(filename) # Toma de captura de pantalla # Toma de captura de pantalla.
         
-        self.write_str_with_opc('DISP:LIST:STATE ON') # Aciva la vista de la lista.
+        self.write_str('DISP:LIST:STATE ON') # Aciva la vista de la lista.
         filename = f'{path}/{TV_TABLE[channel]}_008'
         self.get_screenshot(filename) # Toma de captura de pantalla # Toma de captura de pantalla.
 
         time_to_wait = 30 if MRPLp != 'ND' and BERLdpc != 'ND' else 5
 
-        self.write_str_with_opc('CONF:DTV:MEAS APHase') # Selecciona la ventana Amplitude and Phase.
+        self.write_str('CONF:DTV:MEAS APHase') # Selecciona la ventana Amplitude and Phase.
         dict_aph = self.wait_for_variables('APHase', time_to_wait)
         filename = f'{path}/{TV_TABLE[channel]}_013'
         self.get_screenshot(filename) # Toma de captura de pantalla # Toma de captura de pantalla.
 
-        self.write_str_with_opc('CONF:DTV:MEAS AGRoup') # Selecciona la ventana Amplitude and Phase.
+        self.write_str('CONF:DTV:MEAS AGRoup') # Selecciona la ventana Amplitude and Phase.
         dict_agr = self.wait_for_variables('AGRoup', time_to_wait)
         filename = f'{path}/{TV_TABLE[channel]}_014'
         self.get_screenshot(filename) # Toma de captura de pantalla # Toma de captura de pantalla.
@@ -341,6 +341,51 @@ class EtlManager(InstrumentManager):
         dict_apg.update({'PPATtern': PPATtern})
 
         return dict_apg
+    
+    # Función para medición de televisión analógica
+    def atv_measurement(self, impedance: int, transducers: list, channel: int, path: str):
+        
+        self.write_str('INST SAN') # Switches the instrument to "Spectrum Analyzer" mode.
+        for transducer in transducers:
+            self.write_str(f"CORR:TRAN:SEL '{transducer}'") # Selecciona el transductor suministrado por el usuario.
+            self.write_str('CORR:TRAN ON') # Activa el transductor seleccionado
+        self.write_str(f'INP:PRES:STAT {self.preselector}') # Enciende el preselector.
+        self.write_str('INP:GAIN:STAT OFF') # Apaga el preamplificador.
+        self.write_str(f'INP:IMP {impedance}') # Selecciona la entrada según la entrada de la función.
+        self.write_str(f'INIT:CONT OFF') # Desactiva la medición contínua
+        self.write_str(f'SWE:COUN 10') # Configuración del conteo de barridos a 10.
+        self.write_str('DISP:TRAC1:MODE AVER') # Select the average mode for trace 1
+        self.write_str('DET RMS') # Select the RMS detector
+        self.write_str('CALC:MARK:AOFF') # Switches off all markers.
+        self.write_str('FREQ:SPAN 6.5 MHz') # Setting the span
+        self.write_str('BAND:RES 10 kHz') # Setting the resolution bandwidth
+        self.write_str('BAND:VID 30 kHz') # Setting the video bandwidth
+        self.write_str('SWE:TIME 500 ms') # Setting the sweeptime
+        self.write_str('INP:ATT 0 dB') # Setting the attenuation
+
+        self.write_str(f'FREQ:CENT {TV_TABLE[channel]} MHz')
+        self.write_str(f'CALC:MARK1 ON')
+        self.write_str(f'CALC:MARK1:X {TV_TABLE[channel] - 3} MHz')
+        self.write_str(f'CALC:MARK2 ON')
+        self.write_str(f'CALC:MARK2:X {TV_TABLE[channel] - 1.75} MHz')
+        self.write_str(f'CALC:MARK3 ON')
+        self.write_str(f'CALC:MARK3:X {TV_TABLE[channel] + 2.75} MHz')
+        self.write_str(f'CALC:MARK4 ON')
+        self.write_str(f'CALC:MARK4:X {TV_TABLE[channel] + 3} MHz')
+        self.write_str(f'INIT;*WAI')
+
+        filename = f'{path}/CH_{channel}'
+        self.get_screenshot(filename)
+        self.get_dat_file(filename)
+
+        atv_dict = {
+            'frequency_video': TV_TABLE[channel] - 1.75,
+            'frequency_audio': TV_TABLE[channel] + 2.75,
+            'power_video': round(self.query_float_with_opc('CALC:MARK2:Y?'), 2),
+            'power_audio': round(self.query_float_with_opc('CALC:MARK3:Y?'), 2)
+        }
+
+        return atv_dict
 
 
 if __name__ == '__main__':
@@ -348,5 +393,5 @@ if __name__ == '__main__':
     # etl.write_str('CONF:DTV:MEAS CCDF')  # Selecciona la ventana Modulation errors
     etl.write_str('CONF:DTV:MEAS EPATtern')
     # print(len(etl.query_bin_or_ascii_float_list('TRAC? TRACE1')))
-    # etl.write_str_with_opc('DISP:LIST:STATE OFF')
+    # etl.write_str('DISP:LIST:STATE OFF')
     print(etl.query('CALC:DTV:RES:BFIL? EPPV'))
