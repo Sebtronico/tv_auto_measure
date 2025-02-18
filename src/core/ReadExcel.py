@@ -68,8 +68,8 @@ class ReadExcel:
         return self.main_channelization['Municipio'].tolist()
     
     # Retorna el número de puntos que hay en un municipio
-    def get_number_of_points(self, municipio: str):
-        return self.main_coordinates[self.main_coordinates['Municipio'] == municipio]['Pto.'].max()
+    def get_number_of_points(self, municipality: str):
+        return self.main_coordinates[self.main_coordinates['Municipio'] == municipality]['Pto.'].max()
     
     # Retorna la lista de ingenieros
     def get_engineers_list(self):
@@ -107,7 +107,6 @@ class ReadExcel:
                     for service in search[tec][station_column].keys(): # C1, CI, SC
                         for index in indexes:
                             station = str(dataframe.at[index, station_column]).title()
-                            # Pendiente añadir lo de segundo regional
                             if search[tec][station_column][service] == 'Canal Regional':
                                 channel = dataframe.at[index, 'Operador Regional']
 
@@ -127,7 +126,10 @@ class ReadExcel:
                                 channel = search[tec][station_column][service]
 
                             if station in stations:
-                                dictionary[station][tec].update({channel: int(dataframe.at[index, service])})
+                                try:
+                                    dictionary[station][tec].update({channel: int(dataframe.at[index, service])})
+                                except ValueError:
+                                    continue
             else:
                 pass
 
@@ -292,17 +294,39 @@ class ReadExcel:
     
 
 if __name__ == '__main__':
-    filename = './templates/Preingenieria Meta.xlsx'
+    import os
+    
+    filename = './tests/Preingenieria Cundinamarca.xlsx'
     preingenieria = ReadExcel(filename)
-    dictionary = preingenieria.get_dictionary('El Dorado', 1)
+
+    municipio = 'Tenjo'
+    punto = 1
+
+    dictionary = preingenieria.get_dictionary(municipio, punto)
     print(dictionary)
     print('\n')
-    # print(preingenieria.get_excel_station_list(dictionary))
-    # sfn = preingenieria.get_sfn(dictionary)
-    # print(sfn)
-    # selection = {
-    #     16: 'Boquerón De Chipaque',
-    #     17: 'El Tigre'
-    # }
-    # updated_dictionary = preingenieria.update_sfn(dictionary, selection)
-    # print(updated_dictionary)
+
+    numero_de_puntos = preingenieria.get_number_of_points(municipio)
+
+    # for punto in range(numero_de_puntos):
+    if punto < 10:
+        p = f'0{punto}'
+    else:
+        p = f'{punto}'
+    photosss_folder = 'Fotos y videos punto de medición'
+    supports_folder = 'Soportes punto de medición'
+    for estacion in dictionary.keys():
+        for tecnologia in ['Analógico', 'Digital']:
+            for nombre_canal in dictionary[estacion][tecnologia].keys():
+                numero_canal = dictionary[estacion][tecnologia][nombre_canal]
+                if tecnologia == 'Analógico':
+                    tec = 'A'
+                    os.makedirs(f'{municipio}/P{p}/{photosss_folder}/Entorno', exist_ok=True)
+                    os.makedirs(f'{municipio}/P{p}/{photosss_folder}/{estacion}/CH_{numero_canal}_{tec}_{nombre_canal}', exist_ok=True)
+                    os.makedirs(f'{municipio}/P{p}/{supports_folder}/{estacion}/CH_{numero_canal}_{tec}_{nombre_canal}', exist_ok=True)
+                elif tecnologia == 'Digital':
+                    tec = 'D'
+                    for nombre_servicio in TV_SERVICES[nombre_canal]:
+                        os.makedirs(f'{municipio}/P{p}/{photosss_folder}/Entorno', exist_ok=True)
+                        os.makedirs(f'{municipio}/P{p}/{photosss_folder}/{estacion}/CH_{numero_canal}_{tec}_{nombre_canal}/{nombre_servicio}', exist_ok=True)
+                        os.makedirs(f'{municipio}/P{p}/{supports_folder}/{estacion}/CH_{numero_canal}_{tec}_{nombre_canal}', exist_ok=True)
