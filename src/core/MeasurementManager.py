@@ -2,6 +2,9 @@ from InstrumentManager import InstrumentManager
 from src.utils.constants import *
 import time
 import statistics
+import csv
+import numpy as np
+import os
 
 class EtlManager(InstrumentManager):
     def __init__(self, ip_address: str):
@@ -388,10 +391,186 @@ class EtlManager(InstrumentManager):
         return atv_dict
 
 
+    @staticmethod
+    def decimal_coords_to_dms(latitude: float, longitude: float):
+        # Conversión de latitud
+        lat_deg = int(abs(latitude))
+        lat_min_dec = (abs(latitude) - lat_deg) * 60
+        lat_min = int(lat_min_dec)
+        lat_seg = (lat_min_dec - lat_min) * 60
+        lat_direction = "N" if latitude >= 0 else "S"
+        lat_dms = f"{lat_deg}° {lat_min}' {lat_seg:.2f}\" {lat_direction}"
+
+        # Conversión de longitud
+        lon_deg = int(abs(longitude))
+        lon_min_dec = (abs(longitude) - lon_deg) * 60
+        lon_min = int(lon_min_dec)
+        lon_seg = (lon_min_dec - lon_min) * 60
+        lon_direction = "E" if longitude >= 0 else "W"
+        lon_dms = f"{lon_deg}° {lon_min}' {lon_seg:.2f}\" {lon_direction}"
+
+        return lat_dms, lon_dms
+    
+    # Función para obtener las coordenadas del ETL
+    def get_coordinates(self):
+        self.write_str_with_opc('INST CATV')  # Entrar al modo TV / Radio Analyzer / Receiver.
+        self.write_str_with_opc('CONF:DTV:MEAS OVER')  # Selecciona la ventana Spectrum
+        self.write_str_with_opc('SYST:POS:GPS:DEV PPS2')  # Para que muestre las coordenadas en las imágenes
+        self.write_str_with_opc('DISP:MEAS:OVER:GPS:STAT ON')  # Para que muestre las coordenadas en las imágenes
+
+        while True:
+            try:
+                latitude  = self.query_float_with_opc('SYST:POS:LAT?')
+                longitude = self.query_float_with_opc('SYST:POS:LONG?')
+                break
+            except ValueError:
+                continue
+
+        return self.decimal_coords_to_dms(latitude, longitude)
+
+
+    # Función para añadir hora y coordenadas al .dat
+    def add_to_dat_file(self, filename: str, latitude: str, longitude: str):
+        # Leer el contenido del archivo en codificación ANSI (latin-1)
+        with open(filename, "r", encoding="latin-1") as f:
+            lines = f.readlines()
+
+        hour = self.query_bin_or_ascii_int_list_with_opc('SYSTem:TIME?')
+
+        # Definir las líneas que quieres insertar
+        new_lines = [
+            f"Hour; {hour[0]}:{hour[1]}:{hour[2]};\n"
+            f"Serial; {self.instrument_serial_number};\n"
+            f"Latitude;{latitude};\n",
+            f"Longitude;{longitude};\n"
+        ]
+
+        # Buscar la línea con que contiene "Date" y agregar después las nuevas líneas
+        for i, linea in enumerate(lines):
+            if "DATE" in linea.upper():
+                lines[i + 1:i + 1] = new_lines  # Insertar líneas después
+
+        # Escribir de nuevo el archivo en codificación ANSI (latin-1)
+        with open(filename, "w", encoding="utf-8") as f:
+            f.writelines(lines)
+
+
+    # Función para configuración inicial del banco de mediciones
+    def measurement_bank_setup(self, impedance: int, transducers: list, band: str):
+
+        # Configuraciones generales para todas las bandas
+        self.write_str_with_opc('INST SAN') # Configura el instrumento al modo "Spectrum Analyzer"
+        self.write_str_with_opc(f'DET RMS') # Selecciona el detector "RMS"
+        self.write_str_with_opc(f'INP:ATT 0 dB')
+        self.write_str_with_opc(f'INP:GAIN:STAT OFF')
+
+        # Configuración por cada banda
+        self.write_str_with_opc(f'INP:IMP {impedance}') # Selecciona la entrada según la entrada de la función.
+        for transducer in transducers:
+            self.write_str_with_opc(f"CORR:TRAN:SEL '{transducer}'") # Selecciona el transductor suministrado por el usuario.
+            self.write_str_with_opc('CORR:TRAN ON') # Activa el transductor seleccionado
+
+        if BANDS[band][6] == 'DBUVm':
+            for transducer in transducers:
+                self.write_str_with_opc(f"CORR:TRAN:SEL '{transducer}'") # Selecciona el transductor suministrado por el usuario.
+                self.write_str_with_opc('CORR:TRAN ON') # Activa el transductor seleccionado
+
+        else:
+            for transducer in transducers:
+                self.write_str_with_opc(f"CORR:TRAN:SEL '{transducer}'") # Selecciona el transductor suministrado por el usuario.
+                self.write_str_with_opc('CORR:TRAN OFF') # Apaga el transductor seleccionado
+                self.write_str_with_opc(f'UNIT:POW {BANDS[band][6]}') # Configuración de la unidad
+
+        # Configuración del instrumento según la banda
+        self.write_str_with_opc(f'FREQ:STAR {BANDS[band][0]} MHz') # Configuración de la frecuencia inicial
+        self.write_str_with_opc(f'FREQ:STOP {BANDS[band][1]} MHz') # Configuración de la frecuencia final
+        self.write_str_with_opc(f'BAND:VID {BANDS[band][2]} kHz') # Configuración del video bandwidth
+        self.write_str_with_opc(f'BAND:RES {BANDS[band][3]} kHz') # Configuración del resolution bandwidth
+        
+        # Ajuste del nivel de referencia, según el puerto seleccionado y la unidad de medida.
+        if input == 50 and (BANDS[band][6] == 'DBUV' or BANDS[band][6] == 'DBUVm'):
+            self.write_str_with_opc(f'DISP:TRAC:Y:RLEV 82') # Configuración del nivel de referencia
+        elif input == 75 and (BANDS[band][6] == 'DBUV' or BANDS[band][6] == 'DBUVm'):
+            self.write_str_with_opc(f'DISP:TRAC:Y:RLEV 83.75') # Configuración del nivel de referencia
+        else:
+            self.write_str_with_opc(f'DISP:TRAC:Y:RLEV {BANDS[band][4]}') # Configuración del nivel de referencia
+
+
+    # Función para el banco de mediciones en el modo de obtener solo una traza con el .dat
+    def measurement_bank_one_trace(self, impedance: int, transducers: list, band: str, path: str, latitude: str, longitude: str):
+        # Configuraciones generales para todas las bandas
+        self.measurement_bank_setup(impedance, transducers, band)
+
+        # Configuración de la medición
+        self.write_str_with_opc(f'DISP:TRAC1:MODE {BANDS[band][5]}') # Configuración del modo de traza
+        if BANDS[band][5] == 'AVERage':
+            self.write_str_with_opc(f'INIT:CONT OFF') # Apagado del modo de barrido continuo
+            self.write_str_with_opc(f'SWE:COUN 10') # Configuración del número de trazas
+            self.write_str_with_opc(f'INIT;*WAI') # Inicio del barrido y espera de que se complete el número de trazas
+        elif BANDS[band][5] == 'MAXHold':
+            wait = float(self.query('SWE:TIME?')) # Obtención del tiempo de un barrido
+            self.write_str_with_opc(f'INIT:CONT ON') # Encendido del modo de barrido continuo
+            self.write_str_with_opc(f'INIT') # Inicio del barrido
+            time.sleep(wait*10) # Espera a que se complete el número de trazas
+
+        filename = f'{path}/{BANDS[band][0]} - {BANDS[band][0]}'
+        
+        self.get_screenshot(filename)
+        self.get_dat_file(filename)
+        self.add_to_dat_file(f'{filename}.dat', latitude, longitude)
+
+
+    # Función para banco de mediciones en el modo de obtener varias trazas con el .csv
+    def continuous_measurement_bank(self, impedance: int, transducers: list, band: str, path: str, latitude: str, longitude: str):
+
+        # Configuraciones generales para todas las bandas
+        self.measurement_bank_setup(impedance, transducers, band)
+
+        sweep_points = 1000
+        self.write_str(f'SWE:POIN {sweep_points}')
+        self.write_str_with_opc(f'SWE:COUN 0') # Configuración del número de trazas
+        self.write_str_with_opc('DISP:TRAC1:MODE WRIT') # Configuración del modo de traza
+        self.write_str_with_opc('INIT:CONT OFF') # Encendido del modo de barrido continuo
+        self.write_str_with_opc('INIT;*WAI')
+
+        # Se crea el archivo .dat, para copiar su estructura inicial
+        filename = f'{path}/{BANDS[band][0]} - {BANDS[band][0]}'
+        self.get_dat_file(filename)
+        self.add_to_dat_file(f'{filename}.dat', latitude, longitude)
+
+        # Leer el archivo .dat hasta la línea que contiene "Values;" seguido de algún valor
+        lineas_filtradas = []
+        with open(f'{filename}.dat', "r", encoding="utf-8") as f:
+            for linea in f:
+                linea_limpia = linea.strip()
+                if linea_limpia.lower().startswith("values;") and len(linea_limpia.split(";")) > 1:
+                    lineas_filtradas.append(linea_limpia)
+                    break
+                lineas_filtradas.append(linea_limpia)
+
+        # Escribir las líneas en el archivo .csv
+        with open(f'{filename}.csv', "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f, delimiter=";")  # Usa ";" como separador
+
+            # Escribir las líneas filtradas del .dat en el .csv
+            for linea in lineas_filtradas:
+                campos = linea.split(";")
+                writer.writerow(campos)
+            
+            # Escribir encabezado
+            writer.writerow([f"{i}" for i in np.linspace(BANDS[band][0], BANDS[band][1], sweep_points).tolist()])  # Ajusta el número de puntos según el instrumento
+            
+            for _ in range(10):
+                self.write_str_with_opc('INIT;*WAI')
+                waveform = self.query_bin_or_ascii_float_list_with_opc('TRAC? TRACE1')
+                writer.writerow(waveform)
+
+        # Se elimina el archivo .dat
+        os.remove(f'{filename}.dat')
+
+
+
 if __name__ == '__main__':
     etl = EtlManager('172.23.82.39')
-    # etl.write_str('CONF:DTV:MEAS CCDF')  # Selecciona la ventana Modulation errors
-    etl.write_str('CONF:DTV:MEAS EPATtern')
-    # print(len(etl.query_bin_or_ascii_float_list('TRAC? TRACE1')))
-    # etl.write_str('DISP:LIST:STATE OFF')
-    print(etl.query('CALC:DTV:RES:BFIL? EPPV'))
+    latitude, longitude = etl.get_coordinates()
+    etl.continuous_measurement_bank(75, [], '700', './tests', latitude, longitude)
