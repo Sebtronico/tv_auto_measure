@@ -5,6 +5,7 @@ import statistics
 import csv
 import numpy as np
 import os
+import matplotlib.pyplot as plt
 
 class EtlManager(InstrumentManager):
     def __init__(self, ip_address: str):
@@ -479,19 +480,20 @@ class EtlManager(InstrumentManager):
             for transducer in transducers:
                 self.write_str_with_opc(f"CORR:TRAN:SEL '{transducer}'") # Selecciona el transductor suministrado por el usuario.
                 self.write_str_with_opc('CORR:TRAN OFF') # Apaga el transductor seleccionado
-                self.write_str_with_opc(f'UNIT:POW {BANDS[band][6]}') # Configuración de la unidad
 
+
+        self.write_str_with_opc(f'UNIT:POW {BANDS[band][6]}') # Configuración de la unidad
         # Configuración del instrumento según la banda
         self.write_str_with_opc(f'FREQ:STAR {BANDS[band][0]} MHz') # Configuración de la frecuencia inicial
         self.write_str_with_opc(f'FREQ:STOP {BANDS[band][1]} MHz') # Configuración de la frecuencia final
         self.write_str_with_opc(f'BAND:VID {BANDS[band][2]} kHz') # Configuración del video bandwidth
         self.write_str_with_opc(f'BAND:RES {BANDS[band][3]} kHz') # Configuración del resolution bandwidth
         
+        reference_level = 82 if impedance == 50 else 83.75
+
         # Ajuste del nivel de referencia, según el puerto seleccionado y la unidad de medida.
-        if input == 50 and (BANDS[band][6] == 'DBUV' or BANDS[band][6] == 'DBUVm'):
-            self.write_str_with_opc(f'DISP:TRAC:Y:RLEV 82') # Configuración del nivel de referencia
-        elif input == 75 and (BANDS[band][6] == 'DBUV' or BANDS[band][6] == 'DBUVm'):
-            self.write_str_with_opc(f'DISP:TRAC:Y:RLEV 83.75') # Configuración del nivel de referencia
+        if BANDS[band][6] in ['DBUV', 'DBUVm']:
+            self.write_str_with_opc(f'DISP:TRAC:Y:RLEV {reference_level}') # Configuración del nivel de referencia
         else:
             self.write_str_with_opc(f'DISP:TRAC:Y:RLEV {BANDS[band][4]}') # Configuración del nivel de referencia
 
@@ -518,6 +520,78 @@ class EtlManager(InstrumentManager):
         self.get_screenshot(filename)
         self.get_dat_file(filename)
         self.add_to_dat_file(f'{filename}.dat', latitude, longitude)
+
+
+    # Función para graficar promedio, máximo y mínimo
+    @staticmethod
+    def plot_avg_max_min(matrix: np.ndarray, frequency_vector: np.ndarray, filename: str, unit: str):
+        average = np.mean(matrix, axis=0)
+        maxhold = np.max(matrix, axis=0)
+        minhold = np.min(matrix, axis=0)
+
+        ylim_min = min(minhold) * 0.95 if min(minhold) > 0 else min(minhold) * 1.05
+        ylim_max = max(maxhold) * 0.95 if max(maxhold) < 0 else max(maxhold) * 1.05
+
+        # Graficar los resultados
+        plt.figure(figsize=(12.8, 7.2), dpi=100)
+
+        power_unit = UNITS[unit]
+        # Gráfica del promedio
+        plt.subplot(3, 1, 1)
+        plt.plot(frequency_vector, average, label='Average', color='blue')
+        plt.title('Promedio')
+        plt.xlabel('Frecuencia [MHz]')
+        plt.ylabel(f'Potencia [{power_unit}]')
+        plt.legend()
+        plt.grid()
+        plt.xlim(min(frequency_vector), max(frequency_vector))
+        plt.ylim(ylim_min, ylim_max)
+
+        # Gráfica del máximo
+        plt.subplot(3, 1, 2)
+        plt.plot(frequency_vector, maxhold, label='Max hold', color='green')
+        plt.title('Máximo')
+        plt.xlabel('Frecuencia [MHz]')
+        plt.ylabel(f'Potencia [{power_unit}]')
+        plt.legend()
+        plt.grid()
+        plt.xlim(min(frequency_vector), max(frequency_vector))
+        plt.ylim(ylim_min, ylim_max)
+
+        # Gráfica del mínimo
+        plt.subplot(3, 1, 3)
+        plt.plot(frequency_vector, minhold, label='Min hold', color='red')
+        plt.title('Mínimo')
+        plt.xlabel('Frecuencia [MHz]')
+        plt.ylabel(f'Potencia [{power_unit}]')
+        plt.legend()
+        plt.grid()
+        plt.xlim(min(frequency_vector), max(frequency_vector))
+        plt.ylim(ylim_min, ylim_max)
+
+        # Ajustar el layout para que no se solapen las gráficas
+        plt.tight_layout()
+
+        # Mostrar las gráficas
+        plt.savefig(f"{filename}.png")
+
+
+    # Función para graficar espectrograma
+    @staticmethod
+    def plot_spectrogram(matrix: np.ndarray, frequency_vector: np.ndarray, filename: str, unit: str):
+        plt.figure(figsize=(12.8, 7.2), dpi=100)
+
+        extent = [min(frequency_vector), max(frequency_vector), 0, len(matrix)]  # Rango de frecuencia en X, número de muestras en Y
+        plt.imshow(matrix, aspect='auto', extent=extent, origin='lower', cmap='inferno')
+
+        power_unit = UNITS[unit]
+        # Etiquetas y título
+        plt.xlabel("Frecuencia [MHz]")
+        plt.ylabel("Muestra")
+        plt.title("Espectrograma")
+        plt.colorbar(label=f"Potencia [{power_unit}]")
+
+        plt.savefig(f"{filename}_E.png")
 
 
     # Función para banco de mediciones en el modo de obtener varias trazas con el .csv
@@ -557,20 +631,30 @@ class EtlManager(InstrumentManager):
                 campos = linea.split(";")
                 writer.writerow(campos)
             
+            # Variables para las gráficas y para csv
+            frequency_vector = np.linspace(BANDS[band][0], BANDS[band][1], sweep_points)
+            traces = []
+
             # Escribir encabezado
-            writer.writerow([f"{i}" for i in np.linspace(BANDS[band][0], BANDS[band][1], sweep_points).tolist()])  # Ajusta el número de puntos según el instrumento
+            writer.writerow([f"{i}" for i in frequency_vector.tolist()])  # Ajusta el número de puntos según el instrumento
             
-            for _ in range(10):
+            for _ in range(5):
                 self.write_str_with_opc('INIT;*WAI')
                 waveform = self.query_bin_or_ascii_float_list_with_opc('TRAC? TRACE1')
+                traces.append(waveform)
                 writer.writerow(waveform)
 
         # Se elimina el archivo .dat
         os.remove(f'{filename}.dat')
+
+        # Generación de gráficas
+        matrix_traces = np.array(traces)
+        self.plot_avg_max_min(matrix_traces, frequency_vector, filename, BANDS[band][6])
+        self.plot_spectrogram(matrix_traces, frequency_vector, filename, BANDS[band][6])
 
 
 
 if __name__ == '__main__':
     etl = EtlManager('172.23.82.39')
     latitude, longitude = etl.get_coordinates()
-    etl.continuous_measurement_bank(75, [], '700', './tests', latitude, longitude)
+    etl.continuous_measurement_bank(75, ['TELEVES'], 'Enlace', './tests', latitude, longitude)
