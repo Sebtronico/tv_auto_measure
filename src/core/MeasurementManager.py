@@ -744,18 +744,18 @@ class FPHManager(InstrumentManager):
         self.measurement_bank_setup(impedance, transducers, band)
 
         # Configuración de la medición
-        self.write_str(f'DISP:TRAC1:MODE {BANDS_ETL[band][5]}') # Configuración del modo de traza
-        if BANDS_ETL[band][5] == 'AVERage':
+        self.write_str(f'DISP:TRAC1:MODE {BANDS_FXH[band][5]}') # Configuración del modo de traza
+        if BANDS_FXH[band][5] == 'AVERage':
             self.write_str(f'INIT:CONT OFF') # Apagado del modo de barrido continuo
             self.write_str(f'SWE:COUN 10') # Configuración del número de trazas
             self.write_str(f'INIT;*WAI') # Inicio del barrido y espera de que se complete el número de trazas
-        elif BANDS_ETL[band][5] == 'MAXHold':
+        elif BANDS_FXH[band][5] == 'MAXHold':
             wait = float(self.query('SWE:TIME?')) # Obtención del tiempo de un barrido
             self.write_str(f'INIT:CONT ON') # Encendido del modo de barrido continuo
             self.write_str(f'INIT') # Inicio del barrido
             time.sleep(wait*10) # Espera a que se complete el número de trazas
 
-        filename = f'{path}/{BANDS_ETL[band][0]} - {BANDS_ETL[band][0]}'
+        filename = f'{path}/{BANDS_FXH[band][0]} - {BANDS_FXH[band][0]}'
         
         self.get_screenshot(filename)
         self.get_data_file(filename)
