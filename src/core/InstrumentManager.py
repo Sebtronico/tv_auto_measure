@@ -35,7 +35,7 @@ class InstrumentManager(RsInstrument):
 
         # Configurar atributos personalizados
         self.instrument_status_checking = True  # Error check after each command
-        self.visa_timeout = 10e3 
+        self.visa_timeout = 30e3 
         self.opc_timeout = 60e3  # Timeout for opc-synchronised operations
         self.data_chunk_size = 100  # Definición del tamaño del buffer
         self.opc_query_after_write = True
