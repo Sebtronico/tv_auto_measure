@@ -27,7 +27,7 @@ class EtlManager(InstrumentManager):
 
     
     # Función de generación del archivo de datos *.dat
-    def get_dat_file(self, filename: str):
+    def get_data_file(self, filename: str):
         file_path_instr = 'C:\\R_S\\instr\\user\\datfile.dat' # Ruta y nombre del archivo en el instrumento
         file_path_pc = f'{filename}.dat' # Ruta y nombre del archivo exportado
 
@@ -50,6 +50,7 @@ class EtlManager(InstrumentManager):
         
         return overload
     
+
     # Función para tratar con la saturación, en caso de existir
     def handle_overload(self):
 
@@ -79,6 +80,7 @@ class EtlManager(InstrumentManager):
                         overload = self.read_overload(10)
 
     
+    # Función para medición de potencia de canal en tv digital
     def dtv_power_measurement(self, impedance: int, transducers: list, channel: int, path: str):
 
         # Configuración de parámetros
@@ -126,7 +128,7 @@ class EtlManager(InstrumentManager):
         
         self.write_str('FREQ:SPAN 5.830 MHz') # Configuración del Span
         self.write_str(f'INIT;*WAI') # Inicia la medición y aguarda hasta que se complete el número de barridos seleccionado.
-        self.get_dat_file(filename)
+        self.get_data_file(filename)
 
         # Cálculo de tipo de desviación estándar y tipo de canal
         sigma = round((statistics.pstdev(self.query_bin_or_ascii_float_list('TRAC? TRACE1'))),2)
@@ -142,8 +144,7 @@ class EtlManager(InstrumentManager):
         return {'channel_power': channel_power, 'channel_type': channel_type}
     
 
-    # Función para que el programa espere a que se lean todas las variables
-    # dentro de cada modo de medición.
+    # Función para que el programa espere a que se lean todas las variables dentro de cada modo de medición.
     def wait_for_variables(self, mode: str, seconds: int):
         
         parameters = MODE_PARAMETERS.get(mode, [])  # Evita KeyError si mode es inválido
@@ -180,6 +181,7 @@ class EtlManager(InstrumentManager):
         return dict_out
     
 
+    # Función para medida del modo spectrum en tv digital
     def dtv_spectrum_measurement(self, channel: int, path: str):
         self.write_str('INST CATV')  # Entrar al modo TV / Radio Analyzer / Receiver.
         self.write_str('CONF:DTV:MEAS DSP')  # Selecciona la ventana Spectrum
@@ -205,6 +207,7 @@ class EtlManager(InstrumentManager):
         return dict_dsp
     
 
+    # Función para medida del modo overview en tv digital
     def dtv_overview_measurement(self, channel: int, path: str):
         self.write_str('CONF:DTV:MEAS OVER')
         self.write_str('DISP:ZOOM:OVER BERLdpc')  # Hacer zoom a la variable BER bef. LDPC.
@@ -252,6 +255,7 @@ class EtlManager(InstrumentManager):
         return dict_over
     
 
+    # Función para la medida del modo modulation analysis en tv digital
     def dtv_modulation_analysis_measurement(self, channel: int, path: str):
         # Medición en la ventana 'Modulation errors'
         self.write_str('CONF:DTV:MEAS MERR')  # Selecciona la ventana Modulation errors
@@ -303,6 +307,7 @@ class EtlManager(InstrumentManager):
         return dict_merr
     
 
+    # Función para la medida del modo channel analysis en tv digital
     def dtv_channel_analysis_measurement(self, channel: int, path: str, MRPLp, BERLdpc):
         
         # Medición la ventana Echo Pattern.
@@ -346,6 +351,7 @@ class EtlManager(InstrumentManager):
 
         return dict_apg
     
+
     # Función para medición de televisión analógica
     def atv_measurement(self, impedance: int, transducers: list, channel: int, path: str):
         
@@ -380,7 +386,7 @@ class EtlManager(InstrumentManager):
 
         filename = f'{path}/CH_{channel}'
         self.get_screenshot(filename)
-        self.get_dat_file(filename)
+        self.get_data_file(filename)
 
         atv_dict = {
             'frequency_video': TV_TABLE[channel] - 1.75,
@@ -392,6 +398,7 @@ class EtlManager(InstrumentManager):
         return atv_dict
 
 
+    # Función para convertir coordenadas de formato decimal a grados, minutos y segundos
     @staticmethod
     def decimal_coords_to_dms(latitude: float, longitude: float):
         # Conversión de latitud
@@ -412,12 +419,13 @@ class EtlManager(InstrumentManager):
 
         return lat_dms, lon_dms
     
+
     # Función para obtener las coordenadas del ETL
     def get_coordinates(self):
-        self.write_str_with_opc('INST CATV')  # Entrar al modo TV / Radio Analyzer / Receiver.
-        self.write_str_with_opc('CONF:DTV:MEAS OVER')  # Selecciona la ventana Spectrum
-        self.write_str_with_opc('SYST:POS:GPS:DEV PPS2')  # Para que muestre las coordenadas en las imágenes
-        self.write_str_with_opc('DISP:MEAS:OVER:GPS:STAT ON')  # Para que muestre las coordenadas en las imágenes
+        self.write_str('INST CATV')  # Entrar al modo TV / Radio Analyzer / Receiver.
+        self.write_str('CONF:DTV:MEAS OVER')  # Selecciona la ventana Spectrum
+        self.write_str('SYST:POS:GPS:DEV PPS2')  # Para que muestre las coordenadas en las imágenes
+        self.write_str('DISP:MEAS:OVER:GPS:STAT ON')  # Para que muestre las coordenadas en las imágenes
 
         while True:
             try:
@@ -460,42 +468,42 @@ class EtlManager(InstrumentManager):
     def measurement_bank_setup(self, impedance: int, transducers: list, band: str):
 
         # Configuraciones generales para todas las bandas
-        self.write_str_with_opc('INST SAN') # Configura el instrumento al modo "Spectrum Analyzer"
-        self.write_str_with_opc(f'DET RMS') # Selecciona el detector "RMS"
-        self.write_str_with_opc(f'INP:ATT 0 dB')
-        self.write_str_with_opc(f'INP:GAIN:STAT OFF')
+        self.write_str('INST SAN') # Configura el instrumento al modo "Spectrum Analyzer"
+        self.write_str(f'DET RMS') # Selecciona el detector "RMS"
+        self.write_str(f'INP:ATT 0 dB')
+        self.write_str(f'INP:GAIN:STAT OFF')
 
         # Configuración por cada banda
-        self.write_str_with_opc(f'INP:IMP {impedance}') # Selecciona la entrada según la entrada de la función.
-        for transducer in transducers:
-            self.write_str_with_opc(f"CORR:TRAN:SEL '{transducer}'") # Selecciona el transductor suministrado por el usuario.
-            self.write_str_with_opc('CORR:TRAN ON') # Activa el transductor seleccionado
+        self.write_str(f'INP:IMP {impedance}') # Selecciona la entrada según la entrada de la función.
 
-        if BANDS[band][6] == 'DBUVm':
+        # Activa los transductores seleccionados si la unidad es dBuV/m
+        if BANDS_ETL[band][6] == 'DBUVm':
             for transducer in transducers:
-                self.write_str_with_opc(f"CORR:TRAN:SEL '{transducer}'") # Selecciona el transductor suministrado por el usuario.
-                self.write_str_with_opc('CORR:TRAN ON') # Activa el transductor seleccionado
-
+                self.write_str(f"CORR:TRAN:SEL '{transducer}'") # Selecciona el transductor suministrado por el usuario.
+                self.write_str('CORR:TRAN ON') # Activa el transductor seleccionado
+        # En caso contrario, los apaga todos
         else:
             for transducer in transducers:
-                self.write_str_with_opc(f"CORR:TRAN:SEL '{transducer}'") # Selecciona el transductor suministrado por el usuario.
-                self.write_str_with_opc('CORR:TRAN OFF') # Apaga el transductor seleccionado
+                self.write_str(f"CORR:TRAN:SEL '{transducer}'") # Selecciona el transductor suministrado por el usuario.
+                self.write_str('CORR:TRAN OFF') # Apaga el transductor seleccionado
 
 
-        self.write_str_with_opc(f'UNIT:POW {BANDS[band][6]}') # Configuración de la unidad
-        # Configuración del instrumento según la banda
-        self.write_str_with_opc(f'FREQ:STAR {BANDS[band][0]} MHz') # Configuración de la frecuencia inicial
-        self.write_str_with_opc(f'FREQ:STOP {BANDS[band][1]} MHz') # Configuración de la frecuencia final
-        self.write_str_with_opc(f'BAND:VID {BANDS[band][2]} kHz') # Configuración del video bandwidth
-        self.write_str_with_opc(f'BAND:RES {BANDS[band][3]} kHz') # Configuración del resolution bandwidth
+        self.write_str(f'UNIT:POW {BANDS_ETL[band][6]}') # Configuración de la unidad
         
+        # Configuración del instrumento según la banda
+        self.write_str(f'FREQ:STAR {BANDS_ETL[band][0]} MHz') # Configuración de la frecuencia inicial
+        self.write_str(f'FREQ:STOP {BANDS_ETL[band][1]} MHz') # Configuración de la frecuencia final
+        self.write_str(f'BAND:VID {BANDS_ETL[band][2]} kHz') # Configuración del video bandwidth
+        self.write_str(f'BAND:RES {BANDS_ETL[band][3]} kHz') # Configuración del resolution bandwidth
+        
+        # Definición del reference level, según el puerto seleccionado
         reference_level = 82 if impedance == 50 else 83.75
 
         # Ajuste del nivel de referencia, según el puerto seleccionado y la unidad de medida.
-        if BANDS[band][6] in ['DBUV', 'DBUVm']:
-            self.write_str_with_opc(f'DISP:TRAC:Y:RLEV {reference_level}') # Configuración del nivel de referencia
+        if BANDS_ETL[band][6] in ['DBUV', 'DBUVm']:
+            self.write_str(f'DISP:TRAC:Y:RLEV {reference_level}') # Configuración del nivel de referencia
         else:
-            self.write_str_with_opc(f'DISP:TRAC:Y:RLEV {BANDS[band][4]}') # Configuración del nivel de referencia
+            self.write_str(f'DISP:TRAC:Y:RLEV {BANDS_ETL[band][4]}') # Configuración del nivel de referencia
 
 
     # Función para el banco de mediciones en el modo de obtener solo una traza con el .dat
@@ -504,21 +512,21 @@ class EtlManager(InstrumentManager):
         self.measurement_bank_setup(impedance, transducers, band)
 
         # Configuración de la medición
-        self.write_str_with_opc(f'DISP:TRAC1:MODE {BANDS[band][5]}') # Configuración del modo de traza
-        if BANDS[band][5] == 'AVERage':
-            self.write_str_with_opc(f'INIT:CONT OFF') # Apagado del modo de barrido continuo
-            self.write_str_with_opc(f'SWE:COUN 10') # Configuración del número de trazas
-            self.write_str_with_opc(f'INIT;*WAI') # Inicio del barrido y espera de que se complete el número de trazas
-        elif BANDS[band][5] == 'MAXHold':
+        self.write_str(f'DISP:TRAC1:MODE {BANDS_ETL[band][5]}') # Configuración del modo de traza
+        if BANDS_ETL[band][5] == 'AVERage':
+            self.write_str(f'INIT:CONT OFF') # Apagado del modo de barrido continuo
+            self.write_str(f'SWE:COUN 10') # Configuración del número de trazas
+            self.write_str(f'INIT;*WAI') # Inicio del barrido y espera de que se complete el número de trazas
+        elif BANDS_ETL[band][5] == 'MAXHold':
             wait = float(self.query('SWE:TIME?')) # Obtención del tiempo de un barrido
-            self.write_str_with_opc(f'INIT:CONT ON') # Encendido del modo de barrido continuo
-            self.write_str_with_opc(f'INIT') # Inicio del barrido
+            self.write_str(f'INIT:CONT ON') # Encendido del modo de barrido continuo
+            self.write_str(f'INIT') # Inicio del barrido
             time.sleep(wait*10) # Espera a que se complete el número de trazas
 
-        filename = f'{path}/{BANDS[band][0]} - {BANDS[band][0]}'
+        filename = f'{path}/{BANDS_ETL[band][0]} - {BANDS_ETL[band][0]}'
         
         self.get_screenshot(filename)
-        self.get_dat_file(filename)
+        self.get_data_file(filename)
         self.add_to_dat_file(f'{filename}.dat', latitude, longitude)
 
 
@@ -602,14 +610,14 @@ class EtlManager(InstrumentManager):
 
         sweep_points = 1000
         self.write_str(f'SWE:POIN {sweep_points}')
-        self.write_str_with_opc(f'SWE:COUN 0') # Configuración del número de trazas
-        self.write_str_with_opc('DISP:TRAC1:MODE WRIT') # Configuración del modo de traza
-        self.write_str_with_opc('INIT:CONT OFF') # Encendido del modo de barrido continuo
-        self.write_str_with_opc('INIT;*WAI')
+        self.write_str(f'SWE:COUN 0') # Configuración del número de trazas
+        self.write_str('DISP:TRAC1:MODE WRIT') # Configuración del modo de traza
+        self.write_str('INIT:CONT OFF') # Encendido del modo de barrido continuo
+        self.write_str('INIT;*WAI')
 
         # Se crea el archivo .dat, para copiar su estructura inicial
-        filename = f'{path}/{BANDS[band][0]} - {BANDS[band][0]}'
-        self.get_dat_file(filename)
+        filename = f'{path}/{BANDS_ETL[band][0]} - {BANDS_ETL[band][1]}'
+        self.get_data_file(filename)
         self.add_to_dat_file(f'{filename}.dat', latitude, longitude)
 
         # Leer el archivo .dat hasta la línea que contiene "Values;" seguido de algún valor
@@ -632,14 +640,14 @@ class EtlManager(InstrumentManager):
                 writer.writerow(campos)
             
             # Variables para las gráficas y para csv
-            frequency_vector = np.linspace(BANDS[band][0], BANDS[band][1], sweep_points)
+            frequency_vector = np.linspace(BANDS_ETL[band][0], BANDS_ETL[band][1], sweep_points)
             traces = []
 
             # Escribir encabezado
             writer.writerow([f"{i}" for i in frequency_vector.tolist()])  # Ajusta el número de puntos según el instrumento
             
-            for _ in range(5):
-                self.write_str_with_opc('INIT;*WAI')
+            for _ in range(100):
+                self.write_str('INIT;*WAI')
                 waveform = self.query_bin_or_ascii_float_list_with_opc('TRAC? TRACE1')
                 traces.append(waveform)
                 writer.writerow(waveform)
@@ -649,12 +657,114 @@ class EtlManager(InstrumentManager):
 
         # Generación de gráficas
         matrix_traces = np.array(traces)
-        self.plot_avg_max_min(matrix_traces, frequency_vector, filename, BANDS[band][6])
-        self.plot_spectrogram(matrix_traces, frequency_vector, filename, BANDS[band][6])
+        self.plot_avg_max_min(matrix_traces, frequency_vector, filename, BANDS_ETL[band][6])
+        self.plot_spectrogram(matrix_traces, frequency_vector, filename, BANDS_ETL[band][6])
 
+
+
+class FPHManager(InstrumentManager):
+    def __init__(self, ip_address: str):
+        super().__init__(ip_address)  # Llama al constructor de InstrumentManager
+
+
+    # Generación de captura de pantalla *.png y envío al pc
+    def get_screenshot(self, filename: str):
+        img_path_instr = '\\Public\Screen Shots\\screenshot.png' # Ruta y nombre del screenshot en el instrumento
+        img_path_pc = f'{filename}.png' # Ruta y nombre del archivo exportado
+
+        self.write_str("HCOP:DEV:LANG PNG") # Definición del formato de la imagen
+        self.write_str(f"MMEM:NAME '{img_path_instr}'") # Creación de la imagen en la memoria
+        self.write_str("HCOP:IMM") # Captura de la pantalla
+
+        self.read_file_from_instrument_to_pc(img_path_instr, img_path_pc) # Transferencia del archivo al PC
+        self.write_str(f"MMEMory:DELete '{img_path_instr}'")  # Se elimina el archivo de la memoria del instrumento 
+
+    
+    # Función de generación del archivo de datos *.dat
+    def get_data_file(self, filename: str):
+        file_path_instr_set = '\\Public\\Datasets\\datafile.set' # Ruta y nombre del archivo .set en el instrumento
+        file_path_instr_csv = '\\Public\\Datasets\\datafile.csv' # Ruta y nombre del archivo .csv en el instrumento
+        file_path_pc_set = f'{filename}.set' # Ruta y nombre del archivo exportado
+        file_path_pc_csv = f'{filename}.csv' # Ruta y nombre del archivo exportado
+
+        self.write_str(f"MMEM:STOR:STAT 1,'{file_path_instr_set}'")
+        self.write_str(f"MMEM:STOR:CSV:STATe 1,'{file_path_instr_csv}'")
+
+        self.read_file_from_instrument_to_pc(file_path_instr_set, file_path_pc_set) # Transferencia del archivo al PC
+        self.read_file_from_instrument_to_pc(file_path_instr_set, file_path_pc_csv) # Transferencia del archivo al PC
+        
+        self.write_str(f"MMEM:DEL '{file_path_instr_set}'")  # Se elimina el archivo de la memoria del instrumento
+        self.write_str(f"MMEM:DEL '{file_path_instr_csv}'")  # Se elimina el archivo de la memoria del instrumento
+
+    
+    # Función para configuración inicial del banco de mediciones
+    def measurement_bank_setup(self, impedance: int, transducers: list, band: str):
+
+        # Configuraciones generales para todas las bandas
+        self.write_str(f'INST SAN') # Configura el instrumento al modo "Spectrum Analyzer"
+        self.write_str(f'DET RMS') # Selecciona el detector "RMS"
+        self.write_str(f'INP:ATT 0 dB') # Atenuación a 0
+        self.write_str(f'INP:GAIN:STAT OFF') # Ganancia a 0
+
+        # Configuración por cada banda
+        self.write_str(f'INP:IMP {impedance}') # Selecciona la entrada según la entrada de la función.
+
+        # Activa los transductores seleccionados si la unidad es dBuV/m
+        if BANDS_FXH[band][6] == 'DUVM':
+            for transducer in transducers:
+                self.write_str(f"CORR:TRAN:SEL '{transducer}'") # Selecciona el transductor suministrado por el usuario.
+                self.write_str('CORR:TRAN ON') # Activa el transductor seleccionado
+        # En caso contrario, los apaga todos
+        else:
+            for transducer in transducers:
+                self.write_str(f"CORR:TRAN:SEL '{transducer}'") # Selecciona el transductor suministrado por el usuario.
+                self.write_str('CORR:TRAN OFF') # Apaga el transductor seleccionado
+
+        self.write_str(f'UNIT:POW {BANDS_FXH[band][6]}') # Configuración de la unidad
+        
+        # Configuración del instrumento según la banda
+        self.write_str(f'FREQ:STAR {BANDS_FXH[band][0]} MHz') # Configuración de la frecuencia inicial
+        self.write_str(f'FREQ:STOP {BANDS_FXH[band][1]} MHz') # Configuración de la frecuencia final
+        self.write_str(f'BAND:VID {BANDS_FXH[band][2]} kHz') # Configuración del video bandwidth
+        self.write_str(f'BAND {BANDS_FXH[band][3]} kHz') # Configuración del resolution bandwidth
+        
+        # Definición del reference level, según el puerto seleccionado
+        reference_level = 82 if impedance == 50 else 83.75
+
+        # Ajuste del nivel de referencia, según el puerto seleccionado y la unidad de medida.
+        if BANDS_FXH[band][6] in ['DBUV', 'DUVM']:
+            self.write_str(f'DISP:TRAC:Y:RLEV {reference_level}') # Configuración del nivel de referencia
+        else:
+            self.write_str(f'DISP:TRAC:Y:RLEV {BANDS_FXH[band][4]}') # Configuración del nivel de referencia
+
+
+    # Función para el banco de mediciones en el modo de obtener solo una traza con el .dat
+    def measurement_bank_one_trace(self, impedance: int, transducers: list, band: str, path: str, latitude: str, longitude: str):
+        # Configuraciones generales para todas las bandas
+        self.measurement_bank_setup(impedance, transducers, band)
+
+        # Configuración de la medición
+        self.write_str(f'DISP:TRAC1:MODE {BANDS_ETL[band][5]}') # Configuración del modo de traza
+        if BANDS_ETL[band][5] == 'AVERage':
+            self.write_str(f'INIT:CONT OFF') # Apagado del modo de barrido continuo
+            self.write_str(f'SWE:COUN 10') # Configuración del número de trazas
+            self.write_str(f'INIT;*WAI') # Inicio del barrido y espera de que se complete el número de trazas
+        elif BANDS_ETL[band][5] == 'MAXHold':
+            wait = float(self.query('SWE:TIME?')) # Obtención del tiempo de un barrido
+            self.write_str(f'INIT:CONT ON') # Encendido del modo de barrido continuo
+            self.write_str(f'INIT') # Inicio del barrido
+            time.sleep(wait*10) # Espera a que se complete el número de trazas
+
+        filename = f'{path}/{BANDS_ETL[band][0]} - {BANDS_ETL[band][0]}'
+        
+        self.get_screenshot(filename)
+        self.get_data_file(filename)
+        # self.add_to_dat_file(f'{filename}.dat', latitude, longitude)
 
 
 if __name__ == '__main__':
-    etl = EtlManager('172.23.82.39')
+    # etl = EtlManager('172.23.82.39')
+    etl = EtlManager('192.168.1.108')
+    etl.reset()
     latitude, longitude = etl.get_coordinates()
-    etl.continuous_measurement_bank(75, ['TELEVES'], 'Enlace', './tests', latitude, longitude)
+    etl.continuous_measurement_bank(75, ['BICOLOG 20300', 'CABLE BICOLOG'], 'Enlace', './tests', latitude, longitude)
