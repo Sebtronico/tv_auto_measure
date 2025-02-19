@@ -156,13 +156,13 @@ BANDS_FXH = {
     '5GHz':   [5180,   5825,   100,  30, -60,   'MAXHold', 'DBM'],
     '2300MHz':[2300,   2400,   100,  30, -60,   'AVERage', 'DBM'],
     'Enlace': [300,    330,    30,   10,  82,   'AVERage', 'DBUV'],
-    'tv_b1':  [54,     88,     30,   10,  82,   'AVERage', 'DBUVm'],
-    'tv_b3':  [174,    216,    30,   10,  82,   'AVERage', 'DBUVm'],
-    'tv_d':   [470,    512,    30,   10,  82,   'AVERage', 'DBUVm'],
-    'tv_b4':  [512,    608,    30,   10,  82,   'AVERage', 'DBUVm'],
-    'tv_b4_5':[614,    656,    30,   10,  82,   'AVERage', 'DBUVm'],
-    'tv_b5':  [656,    698,    30,   10,  82,   'AVERage', 'DBUVm'],
-    'FM':     [88,     108,    30,   10,  82,   'AVERage', 'DBUVm'],
+    'tv_b1':  [54,     88,     30,   10,  82,   'AVERage', 'DUVM'],
+    'tv_b3':  [174,    216,    30,   10,  82,   'AVERage', 'DUVM'],
+    'tv_d':   [470,    512,    30,   10,  82,   'AVERage', 'DUVM'],
+    'tv_b4':  [512,    608,    30,   10,  82,   'AVERage', 'DUVM'],
+    'tv_b4_5':[614,    656,    30,   10,  82,   'AVERage', 'DUVM'],
+    'tv_b5':  [656,    698,    30,   10,  82,   'AVERage', 'DUVM'],
+    'FM':     [88,     108,    30,   10,  82,   'AVERage', 'DUVM'],
 }
 
 UNITS = {
