@@ -287,7 +287,7 @@ class EtlManager(InstrumentManager):
         
         t = time.time()
         while True:
-            result = etl.query_str_with_opc('CALC:DTV:RES? MERFrms')  
+            result = self.query_str_with_opc('CALC:DTV:RES? MERFrms')  
             if result != '---':  
                 time.sleep(0.25)
                 break  # Sale del bucle si la condición 1 se cumple
@@ -312,11 +312,11 @@ class EtlManager(InstrumentManager):
         
         # Medición la ventana Echo Pattern.
         self.write_str('CONF:DTV:MEAS EPATtern')
-        self.write_str('DISP:LIST:STATE OFF') # Desactiva la vista de la lista.
+        self.write_str('DISP:LIST:STATE ON') # Desactiva la vista de la lista.
 
         t = time.time()
         while True:
-            result = etl.query_str_with_opc('CALC:DTV:RES? MERFrms')  
+            result = self.query_str_with_opc('CALC:DTV:RES:BFIL? EPPV')  
             if result != '---':
                 time.sleep(0.25)
                 break  # Sale del bucle si la condición 1 se cumple
@@ -326,11 +326,11 @@ class EtlManager(InstrumentManager):
 
         PPATtern = self.query_with_opc('CALC:DTV:RES:L1PR? PPATtern') # Obtención de la variable patrón de pilotos.
 
-        filename = f'{path}/{TV_TABLE[channel]}_007'
+        filename = f'{path}/{TV_TABLE[channel]}_008'
         self.get_screenshot(filename) # Toma de captura de pantalla # Toma de captura de pantalla.
         
-        self.write_str('DISP:LIST:STATE ON') # Aciva la vista de la lista.
-        filename = f'{path}/{TV_TABLE[channel]}_008'
+        self.write_str('DISP:LIST:STATE OFF') # Aciva la vista de la lista.
+        filename = f'{path}/{TV_TABLE[channel]}_007'
         self.get_screenshot(filename) # Toma de captura de pantalla # Toma de captura de pantalla.
 
         time_to_wait = 30 if MRPLp != 'ND' and BERLdpc != 'ND' else 5
@@ -669,7 +669,7 @@ class FPHManager(InstrumentManager):
 
     # Generación de captura de pantalla *.png y envío al pc
     def get_screenshot(self, filename: str):
-        img_path_instr = '\\Public\Screen Shots\\screenshot.png' # Ruta y nombre del screenshot en el instrumento
+        img_path_instr = '\\Public\\Screen Shots\\screenshot.png' # Ruta y nombre del screenshot en el instrumento
         img_path_pc = f'{filename}.png' # Ruta y nombre del archivo exportado
 
         self.write_str("HCOP:DEV:LANG PNG") # Definición del formato de la imagen
@@ -691,7 +691,7 @@ class FPHManager(InstrumentManager):
         self.write_str(f"MMEM:STOR:CSV:STATe 1,'{file_path_instr_csv}'")
 
         self.read_file_from_instrument_to_pc(file_path_instr_set, file_path_pc_set) # Transferencia del archivo al PC
-        self.read_file_from_instrument_to_pc(file_path_instr_set, file_path_pc_csv) # Transferencia del archivo al PC
+        self.read_file_from_instrument_to_pc(file_path_instr_csv, file_path_pc_csv) # Transferencia del archivo al PC
         
         self.write_str(f"MMEM:DEL '{file_path_instr_set}'")  # Se elimina el archivo de la memoria del instrumento
         self.write_str(f"MMEM:DEL '{file_path_instr_csv}'")  # Se elimina el archivo de la memoria del instrumento
@@ -704,7 +704,7 @@ class FPHManager(InstrumentManager):
         self.write_str(f'INST SAN') # Configura el instrumento al modo "Spectrum Analyzer"
         self.write_str(f'DET RMS') # Selecciona el detector "RMS"
         self.write_str(f'INP:ATT 0 dB') # Atenuación a 0
-        self.write_str(f'INP:GAIN:STAT OFF') # Ganancia a 0
+        # self.write_str(f'INP:GAIN:STAT OFF') # Ganancia a 0
 
         # Configuración por cada banda
         self.write_str(f'INP:IMP {impedance}') # Selecciona la entrada según la entrada de la función.
@@ -764,7 +764,7 @@ class FPHManager(InstrumentManager):
 
 if __name__ == '__main__':
     # etl = EtlManager('172.23.82.39')
-    etl = EtlManager('192.168.1.108')
-    etl.reset()
-    latitude, longitude = etl.get_coordinates()
-    etl.continuous_measurement_bank(75, ['BICOLOG 20300', 'CABLE BICOLOG'], 'Enlace', './tests', latitude, longitude)
+    fph = FPHManager('192.168.1.104')
+    fph.reset()
+    # latitude, longitude = etl.get_coordinates()
+    fph.measurement_bank_one_trace(75, [], 'Enlace', './tests', 1, 2)
