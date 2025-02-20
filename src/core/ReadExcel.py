@@ -1,4 +1,5 @@
 import pandas as pd
+from collections import OrderedDict
 from src.utils.constants import *
 
 class ReadExcel:
@@ -51,7 +52,7 @@ class ReadExcel:
             regional_channel = self.regionals.at[regional_index, 'Operador']
             self.main_channelization.loc[index,'Operador Regional'] = regional_channel
 
-        # Corrección de valores nulos en la columna de operador regional
+        # Creación de columna de canal regional 1 para canales digitales
         null_indexes_addt = self.addt_channelization.index[self.addt_channelization['Operador Regional'].isnull() == True].tolist()
         for index in null_indexes_addt:
             department = self.addt_channelization.at[index,'Departamento']
@@ -59,6 +60,26 @@ class ReadExcel:
             regional_index = self.regionals.index[(self.regionals['Municipio'] == null_municipality_addt) & (self.regionals['Departamento'] == department)].tolist()[0]
             regional_channel = self.regionals.at[regional_index, 'Operador']
             self.addt_channelization.loc[index,'Operador Regional'] = regional_channel
+            
+        # Creación de columna de canal regional 1 para canales analógicos
+        self.main_channelization['Regional Municipio'] = None
+        all_indexes_main = self.main_channelization.index.tolist()
+        for index in all_indexes_main:
+            department = self.main_channelization.at[index,'Departamento']
+            municipality_main = self.main_channelization.at[index,'Municipio']
+            regional_index = self.regionals.index[(self.regionals['Municipio'] == municipality_main) & (self.regionals['Departamento'] == department)].tolist()[0]
+            regional_channel = self.regionals.at[regional_index, 'Operador']
+            self.main_channelization.at[index,'Regional Municipio'] = regional_channel
+
+        # Creación de columna de canal regional 1 para canales analógicos
+        self.addt_channelization['Regional Municipio'] = None
+        all_indexes_addt = self.addt_channelization.index.tolist()
+        for index in all_indexes_addt:
+            department = self.addt_channelization.at[index,'Departamento']
+            municipality_addt = self.addt_channelization.at[index,'Municipio']
+            regional_index = self.regionals.index[(self.regionals['Municipio'] == municipality_addt) & (self.regionals['Departamento'] == department)].tolist()[0]
+            regional_channel = self.regionals.at[regional_index, 'Operador']
+            self.addt_channelization.at[index,'Regional Municipio'] = regional_channel
 
         self.main_iterator = list(SEARCH_PRINCIPALS['Analógico'].keys()) + list(SEARCH_PRINCIPALS['Digital'].keys())
         self.addt_iterator = list(SEARCH_ADDITIONALS['Analógico'].keys()) + list(SEARCH_ADDITIONALS['Digital'].keys())
@@ -67,14 +88,17 @@ class ReadExcel:
     def get_municipalities(self):
         return self.main_channelization['Municipio'].tolist()
     
+
     # Retorna el número de puntos que hay en un municipio
     def get_number_of_points(self, municipality: str):
         return self.main_coordinates[self.main_coordinates['Municipio'] == municipality]['Pto.'].max()
     
+
     # Retorna la lista de ingenieros
     def get_engineers_list(self):
         return self.engineers['Ingeniero'].tolist()
     
+
     # Hace la separación de las columnas que contienen 'NombreDeLaEstación - Operador'
     @staticmethod
     def separate_regional_channel(dataframe: pd.DataFrame, base_column: str, regional_column: str):
@@ -107,7 +131,10 @@ class ReadExcel:
                     for service in search[tec][station_column].keys(): # C1, CI, SC
                         for index in indexes:
                             station = str(dataframe.at[index, station_column]).title()
-                            if search[tec][station_column][service] == 'Canal Regional':
+                            if search[tec][station_column][service] == 'Regional Municipio':
+                                channel = dataframe.at[index, 'Regional Municipio']
+
+                            elif search[tec][station_column][service] == 'Canal Regional':
                                 channel = dataframe.at[index, 'Operador Regional']
 
                             elif search[tec][station_column][service] == 'Regional 2':
@@ -135,6 +162,7 @@ class ReadExcel:
 
         return dictionary
     
+
     # Depura el diccionario para eliminar estaciones repetidas
     @staticmethod
     def debug_dictionary(dictionary: dict):
@@ -162,6 +190,7 @@ class ReadExcel:
 
         return dictionary 
     
+
     # Llena el diccionario con los valores de acimut
     @staticmethod
     def fill_acimuth(municipality: str, point: int, stations: list, dataframe: pd.DataFrame, columns: dict, dictionary: dict):
@@ -179,61 +208,66 @@ class ReadExcel:
                     continue
 
         return dictionary
+
     
-    # @staticmethod
-    # def clean_asigned_without_station(dictionary: dict):
-    #     if 'Asignado Sin Estación' not in dictionary:
-    #         return dictionary  # Si no existe la clave, devolvemos el diccionario sin cambios
-
-    #     # Obtener los datos de "Asignado Sin Estación"
-    #     datos_ase = dictionary['Asignado Sin Estación']
-
-    #     # Recopilar todos los valores de "Analógico" en las demás estaciones
-    #     valores_analogicos_presentes = {}
-    #     for estacion, info in dictionary.items():
-    #         if estacion != 'Asignado Sin Estación' and 'Analógico' in info:
-    #             for canal, numero in info['Analógico'].items():
-    #                 valores_analogicos_presentes[numero] = canal  # Guardamos por número de canal
-
-    #     # Filtrar las entradas de "Analógico" en 'Asignado Sin Estación' que ya existen en otra estación
-    #     if 'Analógico' in datos_ase:
-    #         datos_ase['Analógico'] = {
-    #             canal: numero for canal, numero in datos_ase['Analógico'].items()
-    #             if numero not in valores_analogicos_presentes
-    #         }
-
-    #     # Si después de limpiar 'Asignado Sin Estación', no quedan valores en 'Analógico' y 'Digital', eliminarlo
-    #     if not datos_ase['Analógico'] and not datos_ase['Digital']:
-    #         del dictionary['Asignado Sin Estación']
-
-    #     return dictionary
+    # Función para ordenar el diccionario por acimuth y por número de canal
+    @staticmethod
+    def sort_dictionary(dictionary):
+        # Ordenar las estaciones por acimut de menor a mayor
+        sorted_stations = sorted(dictionary.items(), key=lambda x: x[1]['Acimuth'])
+        
+        sorted_dictionary = {}
+        for station, data in sorted_stations:
+            # Ordenar los diccionarios 'Analógico' y 'Digital' por número de canal
+            analogico_ordenado = dict(sorted(data['Analógico'].items(), key=lambda x: x[1]))
+            digital_ordenado = dict(sorted(data['Digital'].items(), key=lambda x: x[1]))
+            
+            # Construir el nuevo diccionario con el mismo formato
+            sorted_dictionary[station] = {
+                'Acimuth': data['Acimuth'],
+                'Analógico': analogico_ordenado,
+                'Digital': digital_ordenado
+            }
+        
+        return sorted_dictionary
+    
 
     # Realiza todo el proceso de creación y llenado del diccionario. 
     def get_dictionary(self, municipality: str, point: int):
+        # Filtra las estaciones que contienen al municipio seleccionado
         main_index = self.main_channelization.index[self.main_channelization['Municipio'] == municipality].tolist()
         addt_index = self.addt_channelization.index[self.addt_channelization['Municipio'] == municipality].tolist()
 
+        # Obtiene la lista de estaciones en ambas hojas
         main_stations = [str(self.main_channelization.at[main_index[0],key]).title() for key in self.main_iterator if str(self.main_channelization.at[main_index[0],key]).title() not in ['Sin Obligación', 'No Tiene']]
         addt_stations = [str(self.addt_channelization.at[index,key]).title() for index in addt_index for key in self.addt_iterator if str(self.addt_channelization.at[index,key]).title() not in ['No Aplica']]
 
+        # Obtiene la lista total de estaciones
         stations = list(set(main_stations + addt_stations))
 
+        # Creación del diccionario en blanco
         dictionary = {station: {'Acimuth': 0, 'Analógico': {}, 'Digital': {}} for station in stations}
 
+        # Llenado del diccionario con ambas hojas
         dictionary = self.fill_dictionary(self.main_channelization, stations, main_index, SEARCH_PRINCIPALS,  dictionary)
         dictionary = self.fill_dictionary(self.addt_channelization, stations, addt_index, SEARCH_ADDITIONALS, dictionary)
 
-        dictionary = self.debug_dictionary(dictionary)
-
+        # Listado final de estaciones
         stations  = list(dictionary.keys())
 
+        # Llena el acimuth de todas las estaciones
         dictionary = self.fill_acimuth(municipality, point, stations, self.main_coordinates, PRINCIPAL,  dictionary)
         dictionary = self.fill_acimuth(municipality, point, stations, self.addt_coordinates, ADDITIONAL, dictionary)
 
-        # dictionary = self.clean_asigned_without_station(dictionary)
+        # Eliminación de estaciones repetidas
+        dictionary = self.debug_dictionary(dictionary)
 
+        # Ordena las estaciones, primero por orden de acimuth y luego por orden de canal
+        dictionary = self.sort_dictionary(dictionary)
+        
         return dictionary
     
+
     # Retorna el diccionario de canales en los que hay que medir SFN.
     @staticmethod
     def get_sfn(dictionary: dict):
@@ -258,24 +292,47 @@ class ReadExcel:
 
         return sorted_channels
     
+
     # Actualiza el diccionario para eliminar los canales de menor potencia (obtenidos de la medición SFN).
     @staticmethod
-    def update_sfn(dictionary, selection):
+    def update_sfn(diccionario_original, diccionario_eleccion):
+        """
+        Limpia el diccionario original eliminando los canales digitales repetidos
+        basándose en el diccionario de elección.
+        
+        Args:
+            diccionario_original (dict): Diccionario con la información de todas las estaciones
+            diccionario_eleccion (dict): Diccionario que indica qué estación se quiere mantener para cada canal
+            
+        Returns:
+            dict: Diccionario original modificado con los canales repetidos eliminados
+        """
+        # Creamos una copia del diccionario original para no modificarlo directamente
+        diccionario_limpio = diccionario_original.copy()
+        
+        # Iteramos sobre cada estación en el diccionario
+        for estacion in diccionario_limpio:
+            # Obtenemos el diccionario Digital de la estación actual
+            digital = diccionario_limpio[estacion]['Digital']
+            
+            # Lista para almacenar los canales a eliminar
+            canales_a_eliminar = []
+            
+            # Revisamos cada canal en el diccionario Digital
+            for operador, canal in digital.items():
+                # Si el canal está en el diccionario de elección
+                if canal in diccionario_eleccion:
+                    # Si la estación actual no es la elegida para este canal
+                    if diccionario_eleccion[canal] != estacion:
+                        # Marcamos el canal para eliminar
+                        canales_a_eliminar.append(operador)
+            
+            # Eliminamos los canales marcados
+            for operador in canales_a_eliminar:
+                del digital[operador]
+                
+        return diccionario_limpio
 
-        # Selecciones de ejemplo
-        # selecciones = {
-        #     16: 'Boquerón De Chipaque',
-        #     17: 'El Tigre'
-        # }
-
-        # Eliminar los canales no seleccionados del diccionario original
-        for numero, estacion_seleccionada in selection.items():
-            for estacion, info in dictionary.items():
-                if 'Digital' in info and numero in info['Digital']:
-                    if estacion != estacion_seleccionada:
-                        del info['Digital'][numero]
-
-        return dictionary
 
     # Retorna la lista de estaciones que van en la hoja de 'Información Gral' del excel de post procesamiento
     @staticmethod
@@ -300,33 +357,49 @@ if __name__ == '__main__':
     preingenieria = ReadExcel(filename)
 
     municipio = 'Tenjo'
-    punto = 1
+    punto = 5
 
     dictionary = preingenieria.get_dictionary(municipio, punto)
-    print(dictionary)
-    print('\n')
 
-    numero_de_puntos = preingenieria.get_number_of_points(municipio)
+    sfn = preingenieria.get_sfn(dictionary)
+
+    selecciones = {
+        14: 'Suba',
+        15: 'Suba',
+        16: 'Calatrava',
+        17: 'Tibitóc'
+    }
+
+    dictionary2 = preingenieria.update_sfn(dictionary, selecciones)
+    
+
+    # for station in dictionary.keys():
+    #     print(station)
+    #     print(dictionary[station]['Acimuth'])
+    #     print(dictionary[station]['Digital'])
+    #     print('\n')
+
+    # numero_de_puntos = preingenieria.get_number_of_points(municipio)
 
     # for punto in range(numero_de_puntos):
-    if punto < 10:
-        p = f'0{punto}'
-    else:
-        p = f'{punto}'
-    photosss_folder = 'Fotos y videos punto de medición'
-    supports_folder = 'Soportes punto de medición'
-    for estacion in dictionary.keys():
-        for tecnologia in ['Analógico', 'Digital']:
-            for nombre_canal in dictionary[estacion][tecnologia].keys():
-                numero_canal = dictionary[estacion][tecnologia][nombre_canal]
-                if tecnologia == 'Analógico':
-                    tec = 'A'
-                    os.makedirs(f'{municipio}/P{p}/{photosss_folder}/Entorno', exist_ok=True)
-                    os.makedirs(f'{municipio}/P{p}/{photosss_folder}/{estacion}/CH_{numero_canal}_{tec}_{nombre_canal}', exist_ok=True)
-                    os.makedirs(f'{municipio}/P{p}/{supports_folder}/{estacion}/CH_{numero_canal}_{tec}_{nombre_canal}', exist_ok=True)
-                elif tecnologia == 'Digital':
-                    tec = 'D'
-                    for nombre_servicio in TV_SERVICES[nombre_canal]:
-                        os.makedirs(f'{municipio}/P{p}/{photosss_folder}/Entorno', exist_ok=True)
-                        os.makedirs(f'{municipio}/P{p}/{photosss_folder}/{estacion}/CH_{numero_canal}_{tec}_{nombre_canal}/{nombre_servicio}', exist_ok=True)
-                        os.makedirs(f'{municipio}/P{p}/{supports_folder}/{estacion}/CH_{numero_canal}_{tec}_{nombre_canal}', exist_ok=True)
+    # if punto < 10:
+    #     p = f'0{punto}'
+    # else:
+    #     p = f'{punto}'
+    # photosss_folder = 'Fotos y videos punto de medición'
+    # supports_folder = 'Soportes punto de medición'
+    # for estacion in dictionary.keys():
+    #     for tecnologia in ['Analógico', 'Digital']:
+    #         for nombre_canal in dictionary[estacion][tecnologia].keys():
+    #             numero_canal = dictionary[estacion][tecnologia][nombre_canal]
+    #             if tecnologia == 'Analógico':
+    #                 tec = 'A'
+    #                 os.makedirs(f'{municipio}/P{p}/{photosss_folder}/Entorno', exist_ok=True)
+    #                 os.makedirs(f'{municipio}/P{p}/{photosss_folder}/{estacion}/CH_{numero_canal}_{tec}_{nombre_canal}', exist_ok=True)
+    #                 os.makedirs(f'{municipio}/P{p}/{supports_folder}/{estacion}/CH_{numero_canal}_{tec}_{nombre_canal}', exist_ok=True)
+    #             elif tecnologia == 'Digital':
+    #                 tec = 'D'
+    #                 for nombre_servicio in TV_SERVICES[nombre_canal]:
+    #                     os.makedirs(f'{municipio}/P{p}/{photosss_folder}/Entorno', exist_ok=True)
+    #                     os.makedirs(f'{municipio}/P{p}/{photosss_folder}/{estacion}/CH_{numero_canal}_{tec}_{nombre_canal}/{nombre_servicio}', exist_ok=True)
+    #                     os.makedirs(f'{municipio}/P{p}/{supports_folder}/{estacion}/CH_{numero_canal}_{tec}_{nombre_canal}', exist_ok=True)
