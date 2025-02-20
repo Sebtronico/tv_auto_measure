@@ -124,9 +124,7 @@ BANDS_ETL = {
     '2.5':    [2500,   2690,   100,  30, -25,   'AVERage', 'DBM'],
     '900_1':  [894,    915,    30,   10, -60,   'MAXHold', 'DBM'],
     '900_2':  [900,    928,    30,   10, -60,   'AVERage', 'DBM'],
-    '3500':   [3300,   3700,   100,  30, -40,   'MAXHold', 'DBM'],
     '2.4GHz': [2400,   2483.5, 30,   10, -60,   'MAXHold', 'DBM'],
-    '5GHz':   [5180,   5825,   100,  30, -60,   'MAXHold', 'DBM'],
     '2300MHz':[2300,   2400,   100,  30, -60,   'AVERage', 'DBM'],
     'Enlace': [300,    330,    30,   10,  82,   'AVERage', 'DBUV'],
     'tv_b1':  [54,     88,     30,   10,  82,   'AVERage', 'DBUVm'],
@@ -235,7 +233,7 @@ SEARCH_PRINCIPALS = {
 
         'Estación TDT RTVC': {
         'RTVC': 'RTVC',
-        'REG1': 'Canal Regional'
+        'REG1': 'Regional Municipio'
         }
     }
 }
@@ -275,7 +273,7 @@ SEARCH_ADDITIONALS = {
 
         'Estación TDT RTVC': {
             'RTVC': 'RTVC',
-            'REG1': 'Canal Regional'
+            'REG1': 'Regional Municipio'
         },
 
         'Estación TDT 2do_CR': {
