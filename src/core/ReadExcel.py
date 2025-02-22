@@ -357,49 +357,48 @@ if __name__ == '__main__':
     preingenieria = ReadExcel(filename)
 
     municipio = 'Tenjo'
-    punto = 5
+    punto = 2
 
     dictionary = preingenieria.get_dictionary(municipio, punto)
+    # for station in dictionary.items():
+    #     print(station)
+    #     for item in dictionary[station]:
+    #         print()
 
     sfn = preingenieria.get_sfn(dictionary)
+    # print(sfn)
 
-    selecciones = {
-        14: 'Suba',
-        15: 'Suba',
-        16: 'Calatrava',
-        17: 'Tibitóc'
-    }
+    selecciones = {14: 'Manjui', 15: 'Manjui', 16: 'Manjui', 17: 'Manjui'}
 
-    dictionary2 = preingenieria.update_sfn(dictionary, selecciones)
+    dictionary = preingenieria.update_sfn(dictionary, selecciones)
     
-
-    # for station in dictionary.keys():
+    # for station in dictionary2.keys():
     #     print(station)
-    #     print(dictionary[station]['Acimuth'])
-    #     print(dictionary[station]['Digital'])
+    #     print(dictionary2[station]['Acimuth'])
+    #     print(dictionary2[station]['Analógico'])
     #     print('\n')
 
-    # numero_de_puntos = preingenieria.get_number_of_points(municipio)
+    numero_de_puntos = preingenieria.get_number_of_points(municipio)
 
-    # for punto in range(numero_de_puntos):
-    # if punto < 10:
-    #     p = f'0{punto}'
-    # else:
-    #     p = f'{punto}'
-    # photosss_folder = 'Fotos y videos punto de medición'
-    # supports_folder = 'Soportes punto de medición'
-    # for estacion in dictionary.keys():
-    #     for tecnologia in ['Analógico', 'Digital']:
-    #         for nombre_canal in dictionary[estacion][tecnologia].keys():
-    #             numero_canal = dictionary[estacion][tecnologia][nombre_canal]
-    #             if tecnologia == 'Analógico':
-    #                 tec = 'A'
-    #                 os.makedirs(f'{municipio}/P{p}/{photosss_folder}/Entorno', exist_ok=True)
-    #                 os.makedirs(f'{municipio}/P{p}/{photosss_folder}/{estacion}/CH_{numero_canal}_{tec}_{nombre_canal}', exist_ok=True)
-    #                 os.makedirs(f'{municipio}/P{p}/{supports_folder}/{estacion}/CH_{numero_canal}_{tec}_{nombre_canal}', exist_ok=True)
-    #             elif tecnologia == 'Digital':
-    #                 tec = 'D'
-    #                 for nombre_servicio in TV_SERVICES[nombre_canal]:
-    #                     os.makedirs(f'{municipio}/P{p}/{photosss_folder}/Entorno', exist_ok=True)
-    #                     os.makedirs(f'{municipio}/P{p}/{photosss_folder}/{estacion}/CH_{numero_canal}_{tec}_{nombre_canal}/{nombre_servicio}', exist_ok=True)
-    #                     os.makedirs(f'{municipio}/P{p}/{supports_folder}/{estacion}/CH_{numero_canal}_{tec}_{nombre_canal}', exist_ok=True)
+    for punto in range(numero_de_puntos):
+        if punto < 10:
+            p = f'0{punto+1}'
+        else:
+            p = f'{punto+1}'
+        photosss_folder = 'Fotos y videos punto de medición'
+        supports_folder = 'Soportes punto de medición'
+        for estacion in dictionary.keys():
+            for tecnologia in ['Analógico', 'Digital']:
+                for nombre_canal in dictionary[estacion][tecnologia].keys():
+                    numero_canal = dictionary[estacion][tecnologia][nombre_canal]
+                    if tecnologia == 'Analógico':
+                        tec = 'A'
+                        os.makedirs(f'{municipio}/P{p}/{photosss_folder}/Entorno', exist_ok=True)
+                        os.makedirs(f'{municipio}/P{p}/{photosss_folder}/{estacion}/CH_{numero_canal}_{tec}_{nombre_canal}', exist_ok=True)
+                        os.makedirs(f'{municipio}/P{p}/{supports_folder}/{estacion}/CH_{numero_canal}_{tec}_{nombre_canal}', exist_ok=True)
+                    elif tecnologia == 'Digital':
+                        tec = 'D'
+                        for nombre_servicio in TV_SERVICES[nombre_canal]:
+                            os.makedirs(f'{municipio}/P{p}/{photosss_folder}/Entorno', exist_ok=True)
+                            os.makedirs(f'{municipio}/P{p}/{photosss_folder}/{estacion}/CH_{numero_canal}_{tec}_{nombre_canal}/{nombre_servicio}', exist_ok=True)
+                            os.makedirs(f'{municipio}/P{p}/{supports_folder}/{estacion}/CH_{numero_canal}_{tec}_{nombre_canal}', exist_ok=True)
