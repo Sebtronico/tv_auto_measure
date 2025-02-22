@@ -348,4 +348,3 @@ class ReadExcel:
         excel_station_list = sorted(list(set(excel_station_list)))
         
         return excel_station_list
-    
