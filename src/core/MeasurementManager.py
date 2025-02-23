@@ -120,7 +120,7 @@ class EtlManager(InstrumentManager):
         self.write_str(f'INIT:CONT OFF') # Desactiva la medición contínua
         self.write_str(f'SWE:COUN 10') # Configuración del conteo de barridos a 10.
         self.write_str(f'INIT;*WAI') # Inicia la medición y aguarda hasta que se complete el número de barridos seleccionado.
-        channel_power = self.query_float_with_opc('CALC:MARK:FUNC:POW:RES? ACP') # Lectura del nivel de potencia.
+        channel_power = self.query_float_with_opc('CALC:MARK:FUNC:POW:RES? MCACpower') # Lectura del nivel de potencia.
         channel_power = round(channel_power,2) # Redondeo a dos cifras decimales
 
         filename = f'{path}/{TV_TABLE[channel]}'
@@ -435,7 +435,7 @@ class EtlManager(InstrumentManager):
             except ValueError:
                 continue
 
-        return self.decimal_coords_to_dms(latitude, longitude)
+        return latitude, longitude
 
 
     # Función para añadir hora y coordenadas al .dat
@@ -486,15 +486,14 @@ class EtlManager(InstrumentManager):
             for transducer in transducers:
                 self.write_str(f"CORR:TRAN:SEL '{transducer}'") # Selecciona el transductor suministrado por el usuario.
                 self.write_str('CORR:TRAN OFF') # Apaga el transductor seleccionado
+                self.write_str(f'UNIT:POW {BANDS_ETL[band][6]}') # Configuración de la unidad
 
-
-        self.write_str(f'UNIT:POW {BANDS_ETL[band][6]}') # Configuración de la unidad
-        
         # Configuración del instrumento según la banda
         self.write_str(f'FREQ:STAR {BANDS_ETL[band][0]} MHz') # Configuración de la frecuencia inicial
         self.write_str(f'FREQ:STOP {BANDS_ETL[band][1]} MHz') # Configuración de la frecuencia final
         self.write_str(f'BAND:VID {BANDS_ETL[band][2]} kHz') # Configuración del video bandwidth
         self.write_str(f'BAND:RES {BANDS_ETL[band][3]} kHz') # Configuración del resolution bandwidth
+        self.write_str(f'SWE:TIME:AUTO ON')
         
         # Definición del reference level, según el puerto seleccionado
         reference_level = 82 if impedance == 50 else 83.75
@@ -602,6 +601,42 @@ class EtlManager(InstrumentManager):
         plt.savefig(f"{filename}_E.png")
 
 
+    # Función para obtener las variables que van en el .csv
+    def get_variables_for_csv(self, latitude: str, longitude: str):
+        
+        # Se obtiene la fecha
+        array_date = self.query_str_list_with_opc('SYST:DATE?')
+        date = f'{array_date[0]}/{array_date[1].zfill(2)}/{array_date[2].zfill(2)}'
+
+        # Se obtiene la hora
+        array_hour = self.query_str_list_with_opc('SYST:TIME?')
+        hour = f'{array_hour[0]}:{array_hour[1].zfill(2)}:{array_hour[2].zfill(2)}'
+
+        return [
+            ['Equipo', self.full_instrument_model_name],
+            ['Versión', self.instrument_firmware_version],
+            ['Fecha', date],
+            ['Hora', hour],
+            ['Serial', self.instrument_serial_number],
+            ['Latitud', latitude],
+            ['Longitud', longitude],
+            ['Frecuencia central', self.query_int_with_opc('FREQ:CENT?')],
+            ['Frecuencia inicial', self.query_int_with_opc('FREQ:STAR?')],
+            ['Frecuencia final', self.query_int_with_opc('FREQ:STOP?')],
+            ['Span', self.query_int_with_opc('FREQ:SPAN?')],
+            ['Nivel de referencia', round(self.query_float_with_opc('DISP:TRAC:Y:RLEV?'), 2)],
+            ['Offset', self.query_float_with_opc('DISP:TRAC:Y:RLEV:OFFS?')],
+            ['Resolución de ancho de banda', self.query_int_with_opc('BAND:RES?')],
+            ['Video de ancho de banda', self.query_int_with_opc('BAND:VID?')],
+            ['Tiempo de barrido', self.query_float_with_opc('SWE:TIME?')],
+            ['Modo de traza', self.query_str_with_opc('DISP:TRAC1:MODE?')],
+            ['Detector', self.query_str_with_opc('DET?')],
+            ['Unidades-x', 'Hz'],
+            ['Unidades-y', self.query_str_with_opc('UNIT:POW?')],
+            ['Preamplificador', str(self.query_bool_with_opc('INP:GAIN:STAT?'))]
+        ]
+
+
     # Función para banco de mediciones en el modo de obtener varias trazas con el .csv
     def continuous_measurement_bank(self, impedance: int, transducers: list, band: str, path: str, latitude: str, longitude: str):
 
@@ -617,27 +652,17 @@ class EtlManager(InstrumentManager):
 
         # Se crea el archivo .dat, para copiar su estructura inicial
         filename = f'{path}/{BANDS_ETL[band][0]} - {BANDS_ETL[band][1]}'
-        self.get_data_file(filename)
-        self.add_to_dat_file(f'{filename}.dat', latitude, longitude)
-
-        # Leer el archivo .dat hasta la línea que contiene "Values;" seguido de algún valor
-        lineas_filtradas = []
-        with open(f'{filename}.dat', "r", encoding="utf-8") as f:
-            for linea in f:
-                linea_limpia = linea.strip()
-                if linea_limpia.lower().startswith("values;") and len(linea_limpia.split(";")) > 1:
-                    lineas_filtradas.append(linea_limpia)
-                    break
-                lineas_filtradas.append(linea_limpia)
+        
+        # Se obtienen las variables para incluir al principio del csv
+        initial_data = self.get_variables_for_csv(latitude, longitude)
 
         # Escribir las líneas en el archivo .csv
-        with open(f'{filename}.csv', "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f, delimiter=";")  # Usa ";" como separador
+        with open(f'{filename}.csv', 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f, delimiter=';')  # Usa ";" como separador
 
-            # Escribir las líneas filtradas del .dat en el .csv
-            for linea in lineas_filtradas:
-                campos = linea.split(";")
-                writer.writerow(campos)
+            # Se escriben las líneas iniciales
+            for row in initial_data:
+                writer.writerow(row)
             
             # Variables para las gráficas y para csv
             frequency_vector = np.linspace(BANDS_ETL[band][0], BANDS_ETL[band][1], sweep_points)
@@ -651,9 +676,6 @@ class EtlManager(InstrumentManager):
                 waveform = self.query_bin_or_ascii_float_list_with_opc('TRAC? TRACE1')
                 traces.append(waveform)
                 writer.writerow(waveform)
-
-        # Se elimina el archivo .dat
-        os.remove(f'{filename}.dat')
 
         # Generación de gráficas
         matrix_traces = np.array(traces)
@@ -763,8 +785,8 @@ class FPHManager(InstrumentManager):
 
 
 if __name__ == '__main__':
-    # etl = EtlManager('172.23.82.39')
-    fph = FPHManager('192.168.1.104')
-    fph.reset()
-    # latitude, longitude = etl.get_coordinates()
-    fph.measurement_bank_one_trace(75, [], 'Enlace', './tests', 1, 2)
+    etl = EtlManager('172.23.82.39')
+    latitude, longitude = etl.get_coordinates()
+    latitude, longitude = etl.decimal_coords_to_dms(latitude, longitude)
+    
+    etl.continuous_measurement_bank(75, ['TELEVES', 'CABLE TELEVES'], '700', './tests/test_bank', latitude, longitude)
