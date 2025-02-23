@@ -4,7 +4,6 @@ import time
 import statistics
 import csv
 import numpy as np
-import os
 import matplotlib.pyplot as plt
 
 class EtlManager(InstrumentManager):
@@ -542,7 +541,7 @@ class EtlManager(InstrumentManager):
         # Graficar los resultados
         plt.figure(figsize=(12.8, 7.2), dpi=100)
 
-        power_unit = UNITS[unit]
+        power_unit = UNITS_ETL[unit]
         # Gráfica del promedio
         plt.subplot(3, 1, 1)
         plt.plot(frequency_vector, average, label='Average', color='blue')
@@ -591,7 +590,7 @@ class EtlManager(InstrumentManager):
         extent = [min(frequency_vector), max(frequency_vector), 0, len(matrix)]  # Rango de frecuencia en X, número de muestras en Y
         plt.imshow(matrix, aspect='auto', extent=extent, origin='lower', cmap='inferno')
 
-        power_unit = UNITS[unit]
+        power_unit = UNITS_ETL[unit]
         # Etiquetas y título
         plt.xlabel("Frecuencia [MHz]")
         plt.ylabel("Muestra")
@@ -718,6 +717,39 @@ class FPHManager(InstrumentManager):
         self.write_str(f"MMEM:DEL '{file_path_instr_set}'")  # Se elimina el archivo de la memoria del instrumento
         self.write_str(f"MMEM:DEL '{file_path_instr_csv}'")  # Se elimina el archivo de la memoria del instrumento
 
+
+    # Función para convertir coordenadas de formato decimal a grados, minutos y segundos
+    @staticmethod
+    def decimal_coords_to_dms(latitude: list, longitude: list):
+        # Conversión de latitud
+        lat_deg = int(latitude[0])
+        lat_min = int(latitude[1])
+        lat_seg = latitude[2]
+        lat_direction = "N" if lat_deg >= 0 else "S"
+        lat_dms = f"{abs(lat_deg)}° {lat_min}' {lat_seg:.2f}\" {lat_direction}"
+
+        # Conversión de longitud
+        lon_deg = int(longitude[0])
+        lon_min = int(longitude[1])
+        lon_seg = longitude[2]
+        lon_direction = "E" if lon_deg >= 0 else "W"
+        lon_dms = f"{abs(lon_deg)}° {lon_min}' {lon_seg:.2f}\" {lon_direction}"
+
+        return lat_dms, lon_dms
+    
+
+    # Función para obtener las coordenadas del ETL
+    def get_coordinates(self):
+
+        while True:
+            if self.query_bool_with_opc('SYSTem:POSition:VALid?'):
+                break
+
+        latitude = self.query_bin_or_ascii_float_list_with_opc('SYST:POS:LAT?')
+        longitude = self.query_bin_or_ascii_float_list_with_opc('SYST:POS:LONG?')
+
+        return latitude, longitude
+    
     
     # Función para configuración inicial del banco de mediciones
     def measurement_bank_setup(self, impedance: int, transducers: list, band: str):
@@ -733,9 +765,9 @@ class FPHManager(InstrumentManager):
 
         # Activa los transductores seleccionados si la unidad es dBuV/m
         if BANDS_FXH[band][6] == 'DUVM':
-            for transducer in transducers:
-                self.write_str(f"CORR:TRAN:SEL '{transducer}'") # Selecciona el transductor suministrado por el usuario.
-                self.write_str('CORR:TRAN ON') # Activa el transductor seleccionado
+            for tran, transducer in enumerate(transducers):
+                self.write_str(f"CORR:TRAN{tran + 1}:SEL '{transducer}'") # Selecciona el transductor suministrado por el usuario.
+                self.write_str(f'CORR:TRAN{tran + 1} ON') # Activa el transductor seleccionado
         # En caso contrario, los apaga todos
         else:
             for transducer in transducers:
@@ -751,7 +783,7 @@ class FPHManager(InstrumentManager):
         self.write_str(f'BAND {BANDS_FXH[band][3]} kHz') # Configuración del resolution bandwidth
         
         # Definición del reference level, según el puerto seleccionado
-        reference_level = 82 if impedance == 50 else 83.75
+        reference_level = 92 if impedance == 50 else 98.80
 
         # Ajuste del nivel de referencia, según el puerto seleccionado y la unidad de medida.
         if BANDS_FXH[band][6] in ['DBUV', 'DUVM']:
@@ -781,12 +813,165 @@ class FPHManager(InstrumentManager):
         
         self.get_screenshot(filename)
         self.get_data_file(filename)
-        # self.add_to_dat_file(f'{filename}.dat', latitude, longitude)
 
+
+    # Función para graficar promedio, máximo y mínimo
+    @staticmethod
+    def plot_avg_max_min(matrix: np.ndarray, frequency_vector: np.ndarray, filename: str, unit: str):
+        average = np.mean(matrix, axis=0)
+        maxhold = np.max(matrix, axis=0)
+        minhold = np.min(matrix, axis=0)
+
+        ylim_min = min(minhold) * 0.95 if min(minhold) > 0 else min(minhold) * 1.05
+        ylim_max = max(maxhold) * 0.95 if max(maxhold) < 0 else max(maxhold) * 1.05
+
+        # Graficar los resultados
+        plt.figure(figsize=(12.8, 7.2), dpi=100)
+
+        power_unit = UNITS_FXH[unit]
+        # Gráfica del promedio
+        plt.subplot(3, 1, 1)
+        plt.plot(frequency_vector, average, label='Average', color='blue')
+        plt.title('Promedio')
+        plt.xlabel('Frecuencia [MHz]')
+        plt.ylabel(f'Potencia [{power_unit}]')
+        plt.legend()
+        plt.grid()
+        plt.xlim(min(frequency_vector), max(frequency_vector))
+        plt.ylim(ylim_min, ylim_max)
+
+        # Gráfica del máximo
+        plt.subplot(3, 1, 2)
+        plt.plot(frequency_vector, maxhold, label='Max hold', color='green')
+        plt.title('Máximo')
+        plt.xlabel('Frecuencia [MHz]')
+        plt.ylabel(f'Potencia [{power_unit}]')
+        plt.legend()
+        plt.grid()
+        plt.xlim(min(frequency_vector), max(frequency_vector))
+        plt.ylim(ylim_min, ylim_max)
+
+        # Gráfica del mínimo
+        plt.subplot(3, 1, 3)
+        plt.plot(frequency_vector, minhold, label='Min hold', color='red')
+        plt.title('Mínimo')
+        plt.xlabel('Frecuencia [MHz]')
+        plt.ylabel(f'Potencia [{power_unit}]')
+        plt.legend()
+        plt.grid()
+        plt.xlim(min(frequency_vector), max(frequency_vector))
+        plt.ylim(ylim_min, ylim_max)
+
+        # Ajustar el layout para que no se solapen las gráficas
+        plt.tight_layout()
+
+        # Mostrar las gráficas
+        plt.savefig(f"{filename}.png")
+
+
+    # Función para graficar espectrograma
+    @staticmethod
+    def plot_spectrogram(matrix: np.ndarray, frequency_vector: np.ndarray, filename: str, unit: str):
+        plt.figure(figsize=(12.8, 7.2), dpi=100)
+
+        extent = [min(frequency_vector), max(frequency_vector), 0, len(matrix)]  # Rango de frecuencia en X, número de muestras en Y
+        plt.imshow(matrix, aspect='auto', extent=extent, origin='lower', cmap='inferno')
+
+        power_unit = UNITS_FXH[unit]
+        # Etiquetas y título
+        plt.xlabel("Frecuencia [MHz]")
+        plt.ylabel("Muestra")
+        plt.title("Espectrograma")
+        plt.colorbar(label=f"Potencia [{power_unit}]")
+
+        plt.savefig(f"{filename}_E.png")
+
+
+    # Función para obtener las variables que van en el .csv
+    def get_variables_for_csv(self, latitude: str, longitude: str):
+        
+        # Se obtiene la fecha
+        array_date = self.query_str_list_with_opc('SYST:DATE?')
+        date = f'{array_date[0]}/{array_date[1].zfill(2)}/{array_date[2].zfill(2)}'
+
+        # Se obtiene la hora
+        array_hour = self.query_str_list_with_opc('SYST:TIME?')
+        hour = f'{array_hour[0]}:{array_hour[1].zfill(2)}:{array_hour[2].zfill(2)}'
+
+        return [
+            ['Equipo', self.full_instrument_model_name],
+            ['Versión', self.instrument_firmware_version],
+            ['Fecha', date],
+            ['Hora', hour],
+            ['Serial', self.instrument_serial_number],
+            ['Latitud', latitude],
+            ['Longitud', longitude],
+            ['Frecuencia central', self.query_int_with_opc('FREQ:CENT?')],
+            ['Frecuencia inicial', self.query_int_with_opc('FREQ:STAR?')],
+            ['Frecuencia final', self.query_int_with_opc('FREQ:STOP?')],
+            ['Span', self.query_int_with_opc('FREQ:SPAN?')],
+            ['Nivel de referencia', round(self.query_float_with_opc('DISP:TRAC:Y:RLEV?'), 2)],
+            ['Offset', self.query_float_with_opc('DISP:TRAC:Y:RLEV:OFFS?')],
+            ['Resolución de ancho de banda', self.query_int_with_opc('BAND:RES?')],
+            ['Video de ancho de banda', self.query_int_with_opc('BAND:VID?')],
+            ['Tiempo de barrido', self.query_float_with_opc('SWE:TIME?')],
+            ['Modo de traza', self.query_str_with_opc('DISP:TRAC1:MODE?')],
+            ['Detector', self.query_str_with_opc('DET?')],
+            ['Unidades-x', 'Hz'],
+            ['Unidades-y', self.query_str_with_opc('UNIT:POW?')],
+            ['Preamplificador', False]
+        ]
+    
+
+    # Función para banco de mediciones en el modo de obtener varias trazas con el .csv
+    def continuous_measurement_bank(self, impedance: int, transducers: list, band: str, path: str, latitude: str, longitude: str):
+
+        # Configuraciones generales para todas las bandas
+        self.measurement_bank_setup(impedance, transducers, band)
+
+        sweep_points = 711
+        self.write_str(f'SWE:POIN {sweep_points}')
+        self.write_str(f'SWE:COUN 1') # Configuración del número de trazas
+        self.write_str('DISP:TRAC1:MODE WRIT') # Configuración del modo de traza
+        self.write_str('INIT:CONT OFF') # Apagado del modo de barrido continuo
+        self.write_str('INIT;*WAI')
+
+        # Se crea el archivo .dat, para copiar su estructura inicial
+        filename = f'{path}/{BANDS_FXH[band][0]} - {BANDS_FXH[band][1]}'
+        
+        # Se obtienen las variables para incluir al principio del csv
+        initial_data = self.get_variables_for_csv(latitude, longitude)
+
+        # Escribir las líneas en el archivo .csv
+        with open(f'{filename}.csv', 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f, delimiter=';')  # Usa ";" como separador
+
+            # Se escriben las líneas iniciales
+            for row in initial_data:
+                writer.writerow(row)
+            
+            # Variables para las gráficas y para csv
+            frequency_vector = np.linspace(BANDS_FXH[band][0], BANDS_FXH[band][1], sweep_points)
+            traces = []
+
+            # Escribir encabezado
+            writer.writerow([f"{i}" for i in frequency_vector.tolist()])  # Ajusta el número de puntos según el instrumento
+            
+            for _ in range(5):
+                self.write_str('INIT;*WAI')
+                waveform = self.query_bin_or_ascii_float_list_with_opc('TRAC? TRACE1')
+                traces.append(waveform)
+                writer.writerow(waveform)
+
+        # Generación de gráficas
+        matrix_traces = np.array(traces)
+        self.plot_avg_max_min(matrix_traces, frequency_vector, filename, BANDS_FXH[band][6])
+        self.plot_spectrogram(matrix_traces, frequency_vector, filename, BANDS_FXH[band][6])
 
 if __name__ == '__main__':
-    etl = EtlManager('172.23.82.39')
+    etl = FPHManager('192.168.0.7')
+    etl.reset()
     latitude, longitude = etl.get_coordinates()
     latitude, longitude = etl.decimal_coords_to_dms(latitude, longitude)
     
-    etl.continuous_measurement_bank(75, ['TELEVES', 'CABLE TELEVES'], '700', './tests/test_bank', latitude, longitude)
+    etl.continuous_measurement_bank(50, [], 'Enlace', './tests/test_bank', latitude, longitude)
