@@ -968,6 +968,44 @@ class FPHManager(InstrumentManager):
         self.plot_avg_max_min(matrix_traces, frequency_vector, filename, BANDS_FXH[band][6])
         self.plot_spectrogram(matrix_traces, frequency_vector, filename, BANDS_FXH[band][6])
 
+
+
+class MSDManager(InstrumentManager):
+    def __init__(self, ip_address: str):
+        super().__init__(ip_address)  # Llama al constructor de InstrumentManager
+
+
+    # Función para convertir el ángulo ingresado de (0° - 360°) a (-180° - 180°)
+    @staticmethod
+    def convert_angle(park_acimuth: int, station_acimuth: int):
+        rotor_acimuth = station_acimuth - park_acimuth
+        
+        if rotor_acimuth > 180:
+            rotor_acimuth -= 360
+        elif rotor_acimuth < -180:
+            rotor_acimuth += 360
+        
+        return rotor_acimuth
+    
+
+    # Función para pausar el código mientras el rotor está en movimiento
+    def wait_for_rotation(self):
+        while True:
+            state = self.query_str_with_opc(f"AXIS:POS? 'Acimut'")
+            state = state[1:len(state)-1].split(sep=',')[1]
+            if state == 'STOP':
+                break
+
+
+    # Función para mover el rotor
+    def move_rotor(self, park_acimuth: str, station_acimuth: int):
+        rotor_acimuth = self.convert_angle(park_acimuth, station_acimuth)
+        self.write_str(f"AXIS:POS 'Acimut', {rotor_acimuth}")
+        time.sleep(1)
+        self.wait_for_rotation()
+
+        
+
 if __name__ == '__main__':
     etl = FPHManager('192.168.0.7')
     etl.reset()
