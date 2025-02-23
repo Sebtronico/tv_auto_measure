@@ -163,12 +163,17 @@ BANDS_FXH = {
     'FM':     [88,     108,    30,   10,  82,   'AVERage', 'DUVM'],
 }
 
-UNITS = {
+UNITS_ETL = {
     'DBM': 'dBm',
     'DBUV': 'dBμV',
     'DBUVm': 'dBμV/m'
 }
 
+UNITS_FXH = {
+    'DBM': 'dBm',
+    'DBUV': 'dBμV',
+    'DUVM': 'dBμV/m'
+}
 
 """
 ##########################################################################
