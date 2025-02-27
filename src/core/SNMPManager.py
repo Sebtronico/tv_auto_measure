@@ -1,20 +1,37 @@
 import asyncio
 from pysnmp.hlapi.v3arch.asyncio import *
+from RemoteDesktopConnector import *
+from InstrumentController import EtlManager
+import pyautogui
 import time
+from src.utils.constants import *
+
 
 class SNMPManager:
-    def __init__(self, ip: str):
+    def __init__(self, ip_address: str, etl: EtlManager):
         """Inicializa el SNMP Manager con los parámetros básicos"""
-        self.ip = ip
+        self.ip_address = ip_address
         self.read_community = 'public'
         self.write_community = 'management'
         self.port = 161
         self.snmpEngine = SnmpEngine()
+
+        # Crea el controlador del escritorio remoto
+        self.remote_desktop = RemoteDesktopConnector(self.ip_address)
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
         
-        self.get_mac_address()
-        self.snmp_set('1.3.6.1.4.1.2566.127.1.1.157.3.1.2.5.1.3.0.0.0.0.0.1.2', 1) # Apaga el puerto 2
+        # Crea conexión con el controlador SCPI del instrumento
+        self.etl = etl
+        self.etl.write_str('INST TSAN')
+        while True:
+            try:
+                self.get_mac_address()
+                self.snmp_set('1.3.6.1.4.1.2566.127.1.1.157.3.1.2.5.1.3.0.0.0.0.0.1.2', 1) # Apaga el puerto 2
+                break
+            except:
+                self.etl.write_str_with_opc('INST TSAN') # Configura el instrumento al modo "TS Analyzer"
+                continue
 
 
     # Función asíncrona para get
@@ -22,7 +39,7 @@ class SNMPManager:
         iterator = await get_cmd(
             self.snmpEngine,
             CommunityData(self.read_community),
-            await UdpTransportTarget.create((self.ip, self.port)),
+            await UdpTransportTarget.create((self.ip_address, self.port)),
             ContextData(),
             ObjectType(ObjectIdentity(oid)),
         )
@@ -40,7 +57,7 @@ class SNMPManager:
         iterator = await next_cmd(
             self.snmpEngine,
             CommunityData(self.read_community),
-            await UdpTransportTarget.create((self.ip, self.port)),
+            await UdpTransportTarget.create((self.ip_address, self.port)),
             ContextData(),
             ObjectType(ObjectIdentity(oid)),
         )
@@ -59,7 +76,7 @@ class SNMPManager:
         iterator = await bulk_cmd(
             self.snmpEngine,
             CommunityData(self.read_community),
-            await UdpTransportTarget.create((self.ip, self.port)),
+            await UdpTransportTarget.create((self.ip_address, self.port)),
             ContextData(),
             0,
             max_repetitions,
@@ -92,7 +109,7 @@ class SNMPManager:
         async for errorIndication, errorStatus, errorIndex, varBinds in bulk_walk_cmd(
             self.snmpEngine,
             CommunityData(self.read_community),
-            await UdpTransportTarget.create((self.ip, self.port)),
+            await UdpTransportTarget.create((self.ip_address, self.port)),
             ContextData(),
             0,
             10,
@@ -134,7 +151,7 @@ class SNMPManager:
         async for errorIndication, errorStatus, errorIndex, varBinds in bulk_walk_cmd(
             self.snmpEngine,
             CommunityData(self.read_community),
-            await UdpTransportTarget.create((self.ip, self.port)),
+            await UdpTransportTarget.create((self.ip_address, self.port)),
             ContextData(),
             0,
             10,
@@ -171,7 +188,7 @@ class SNMPManager:
         await set_cmd(
             self.snmpEngine,
             CommunityData(self.write_community),
-            await UdpTransportTarget.create((self.ip, self.port)),
+            await UdpTransportTarget.create((self.ip_address, self.port)),
             ContextData(),
             ObjectType(ObjectIdentity(oid), data_type(value)),
         )
@@ -237,8 +254,9 @@ class SNMPManager:
 
 
     # Función para obtener los nombres de los servicios
-    def get_service_names(self, filtered_ids: list):
+    def get_service_names(self):
         """Obtiene los servicios SNMP disponibles en el dispositivo"""
+        filtered_ids = self.get_service_ids()
         service_names = []
         for id in filtered_ids:
             oid = f'1.3.6.1.4.1.2566.127.1.1.157.3.5.2.1.3.{self.mac_address}.1.{self.table_number}.{id}'
@@ -304,7 +322,7 @@ class SNMPManager:
     # Función para obtener la tabla de log durante un minuto
     def get_log_table(self):
         """Obtiene la tabla de logs del dispositivo"""
-        self.start_monitoring()
+        # self.start_monitoring()
         MONITORING_TIME = 60
         log_table = {}
         oid = f'1.3.6.1.4.1.2566.127.1.1.157.3.13.3.1.5.{self.mac_address}.1' # LogEntryEvent
@@ -326,7 +344,7 @@ class SNMPManager:
             end_number = self.snmp_get(f'1.3.6.1.4.1.2566.127.1.1.157.3.13.2.1.2.{self.mac_address}.1')
             end_oid = f'{oid}.{end_number}'
 
-        self.stop_monitoring()
+        # self.stop_monitoring()
         
         return log_table
 
@@ -389,3 +407,100 @@ class SNMPManager:
                 result.append([service_names[i], service_ids[i], actual_network, ts_id, priority_1, priority_2, priority_3])
         
         return result
+    
+
+    # Función para tomar una captura de pantalla
+    @staticmethod
+    def take_screenshot(path: str, channel: int, image_number: int):
+        img = pyautogui.screenshot(region=(60, 25, 640, 480))
+        img.save(f'{path}/TS_{TV_TABLE[channel]}_00{image_number}.png')
+
+
+    # Función para abrir el escritorio remoto y esperar hasta que se encuentre la imagen del ETL
+    def open_remote_desktop(self):
+        self.remote_desktop.connect()
+
+        # Se selecciona la vista de diagrama de pastel, que es donde buscará la imagen de apertura
+        self.select_view(1)
+
+        while True:
+            self.etl.write_str('INST TSAN') # Configura el instrumento al modo "TS Analyzer"
+            try: 
+                if pyautogui.locateOnScreen('./resources/ETL.png', region = (300, 80, 360, 150), grayscale = True, confidence = 0.99) is not None:
+                    time.sleep(5)
+                    try:
+                        if pyautogui.locateOnScreen('./resources/ETL.png', region = (300, 80, 360, 150), grayscale = True, confidence = 0.99) is not None:
+                            break
+                    except:
+                        continue
+            except pyautogui.ImageNotFoundException:
+                continue
+
+
+    # Función para le medición SNMP de un PLP
+    def tansport_stream_measurement(self, path: str, channel: int):
+        """Obtiene un array con todos los resultados de la medición del transport stream para un PLP"""
+        # Se selecciona la vista select view
+        self.select_view(1)
+        time.sleep(1)
+
+        # Se toma la captura de pantalla del diagrama de pastel.
+        self.take_screenshot(path, channel, 1)
+
+        # Se hace el procedimiento para el despliegue del arbol}
+        pyautogui.moveTo(60, 220)
+        time.sleep(1)
+        pyautogui.moveTo(257, 220)
+        pyautogui.click()
+        pyautogui.drag(95, 0, 0.5, button='left')
+        pyautogui.click(187, 220)
+        time.sleep(1)
+
+        # Se toma la captura de pantalla del árbol de transport Stream
+        self.take_screenshot(path, channel, 2)
+
+        # Se actualiza la tabla tsTree
+        self.refresh_table()
+
+        # Se obtiene el número de tabla actual
+        self.get_table_number()
+
+        # Se obtienen los valores requeridos en el postprocesamiento
+        service_ids = self.get_service_ids()
+        service_names = self.get_service_names()
+        actual_network = self.get_actual_network()
+        ts_id = self.get_ts_id()
+
+        # Se envía el comando Clear Statistics and log of all inputs
+        self.select_view(2)
+        pyautogui.click(450, 350)
+        log_table = self.get_log_table()
+        priority_1, priority_2, priority_3 = self.get_errors(log_table)
+        self.take_screenshot(path, channel, 3)
+
+        # Se selecciona la vista de Bit Rate y se toma la captura de pantalla
+        self.select_view(3)
+        time.sleep(1)
+        self.take_screenshot(path, channel, 4)
+
+        # Se selecciona la vista de Table repetition y se toma la captura de pantalla
+        self.select_view(4)
+        time.sleep(1)
+        self.take_screenshot(path, channel, 5)
+
+        # Se cierra la ventana de escritrio remoto
+        self.remote_desktop.disconnect()
+
+        return self.get_result(service_names, service_ids, actual_network, ts_id, priority_1, priority_2, priority_3)
+
+
+
+if __name__ == '__main__':
+    etl = EtlManager('172.23.82.39')
+    instrument = SNMPManager('172.23.82.39', etl)
+
+    instrument.open_remote_desktop()
+    plp_result = instrument.tansport_stream_measurement('./tests', 16)
+    print(plp_result)
+    
+    # instrument.snmp_measurement()
