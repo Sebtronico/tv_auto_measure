@@ -78,7 +78,35 @@ class EtlManager(InstrumentManager):
 
                         overload = self.read_overload(10)
 
+
+    # Función para la configuración inicial en la medición de SFN
+    def sfn_setup(self, impedance: int, transducers: list):
+        # Configuración de parámetros
+        self.attenuation = 0
+        self.preselector = False
+        self.reference_level = 82 if impedance == 50 else 83.75
+
+        for transducer in transducers:
+            self.write_str(f"CORR:TRAN:SEL '{transducer}'") # Selecciona el transductor suministrado por el usuario.
+            self.write_str('CORR:TRAN ON') # Activa el transductor seleccionado
+        self.write_bool(f'INP:PRES:STAT {self.preselector}') # Enciende el preselector.
+        self.write_str('INP:GAIN:STAT OFF') # Apaga el preamplificador.
+        self.write_str(f'INP:IMP {impedance}') # Selecciona la entrada según la entrada de la función.
+        self.write_str('CALC:MARK:FUNC:POW:PRES NONE') # Configuración de sin estándar para la medición de potencia en modo ACP 
+        self.write_str('CALC:MARK:FUNC:POW:SEL ACP') # Activa la medición de potencia absoluta.
+        self.write_str('POW:ACH:ACP 0') # Configura el número de canales adyacentes a 0.
+        self.write_str('POW:ACH:BWID 5.830 MHz') # Configuración del ancho de banda a 5.830 MHz.
+        self.write_str('POW:ACH:BWID:ACH 6 MHz') # Configuración del ancho de banda adyascente a 5.830 MHz.
+        self.write_str('CALC:MARK:AOFF') # Desactiva todos los marcadores.
+        self.write_str(f'DISP:TRAC:Y:RLEV {self.reference_level}') # Configura el expected level.
+        self.write_str(f'DISP:TRAC:Y {self.reference_level} dB') # Configura el range log.
+        self.write_str('BAND:RES 30 kHz') # Configuración de resolution bandwidth
+        self.write_str('BAND:VID 300 kHz') # Configuración de video bandwidth
+        self.write_str('SWE:TIME 500 ms') # Configuración de sweeptime
+        self.write_str(f'INIT:CONT ON') # Activa la medición contínua
+        self.write_str(f'INP:ATT {self.attenuation} dB') # Configuración de la atenuación
     
+
     # Función para medición de potencia de canal en tv digital
     def dtv_power_measurement(self, impedance: int, transducers: list, channel: int, path: str):
 
@@ -998,7 +1026,7 @@ class MSDManager(InstrumentManager):
 
 
     # Función para mover el rotor
-    def move_rotor(self, park_acimuth: str, station_acimuth: int):
+    def move_rotor(self, park_acimuth: int, station_acimuth: int):
         rotor_acimuth = self.convert_angle(park_acimuth, station_acimuth)
         self.write_str(f"AXIS:POS 'Acimut', {rotor_acimuth}")
         time.sleep(1)
