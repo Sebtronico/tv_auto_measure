@@ -18,6 +18,24 @@ TV_TABLE = {
     45: 659, 46: 665, 47: 671, 48: 677, 49: 683, 50: 689, 51: 695
 }
 
+# Definición de PLPs por cada servicio de tv.
+PLP_SERVICES = {
+    'RTVC':	        [101],
+    'Caracol':	    [0, 1],
+    'RCN':	        [0, 1],
+    'City TV':	    [1],
+    'Telecaribe':	[106],
+    'TRO':	        [108],
+    'Teveandina':	[103],
+    'Teleantioquia':[104],
+    'Telesantiago':	[1],
+    'Telecafé':	    [107],
+    'Teleislas':	[0],
+    'Canal Capital':[102],
+    'Telepasto':	[0],
+    'Telepacífico':	[105]
+}
+
 # Diccionario de las variables que se leen en cada modo de medida en tv digital
 MODE_PARAMETERS = {
     'OVER': ['LEVel', 'CFOFfset', 'BROFfset', 'PERatio', 'BERLdpc', 'BBCH', 'FERatio', 'ESRatio'],
