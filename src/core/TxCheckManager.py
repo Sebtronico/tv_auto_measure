@@ -107,9 +107,9 @@ class TxCheckManager:
         for position, img in images.items():
             self.sheet.add_image(img, position)
 
-    def get_txchech_report(self, idn_string: str, txcheck_dictionary: dict, folder_path: str, channel: int):
+    def get_txchech_report(self, serial: str, txcheck_dictionary: dict, folder_path: str, channel: int):
         """ Retorna el reporte de TxCheck. """
-        self.sheet[f'H9'] = idn_string.split(sep=',')[2]
+        self.sheet[f'H9'] = serial
         now = datetime.datetime.now() # Obetención de fecha y hora de la medida
         self.sheet[f'C3'] = f'{now.day}.{now.month}.{now.year}, {now.hour}:{now.minute}:{now.second}'
         self.sheet[f'D21'] = TV_TABLE[channel]
