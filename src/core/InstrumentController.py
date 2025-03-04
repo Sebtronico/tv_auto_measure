@@ -1,14 +1,19 @@
 from InstrumentManager import InstrumentManager
+from SNMPManager import SNMPManager
+from TxCheckManager import TxCheckManager
 from src.utils.constants import *
 import time
 import statistics
 import csv
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 
 class EtlManager(InstrumentManager):
-    def __init__(self, ip_address: str):
+    def __init__(self, ip_address: str, impedance: int, transducers: list):
         self.ip_address = ip_address
+        self.impedance = impedance
+        self.transducers = transducers
         super().__init__(ip_address)  # Llama al constructor de InstrumentManager
 
     
@@ -81,18 +86,18 @@ class EtlManager(InstrumentManager):
 
 
     # Función para la configuración inicial en la medición de SFN
-    def sfn_setup(self, impedance: int, transducers: list):
+    def sfn_setup(self):
         # Configuración de parámetros
         self.attenuation = 0
         self.preselector = False
-        self.reference_level = 82 if impedance == 50 else 83.75
+        self.reference_level = 82 if self.impedance == 50 else 83.75
 
-        for transducer in transducers:
+        for transducer in self.transducers:
             self.write_str(f"CORR:TRAN:SEL '{transducer}'") # Selecciona el transductor suministrado por el usuario.
             self.write_str('CORR:TRAN ON') # Activa el transductor seleccionado
         self.write_bool(f'INP:PRES:STAT {self.preselector}') # Enciende el preselector.
         self.write_str('INP:GAIN:STAT OFF') # Apaga el preamplificador.
-        self.write_str(f'INP:IMP {impedance}') # Selecciona la entrada según la entrada de la función.
+        self.write_str(f'INP:IMP {self.impedance}') # Selecciona la entrada según la entrada de la función.
         self.write_str('CALC:MARK:FUNC:POW:PRES NONE') # Configuración de sin estándar para la medición de potencia en modo ACP 
         self.write_str('CALC:MARK:FUNC:POW:SEL ACP') # Activa la medición de potencia absoluta.
         self.write_str('POW:ACH:ACP 0') # Configura el número de canales adyacentes a 0.
@@ -109,16 +114,16 @@ class EtlManager(InstrumentManager):
     
 
     # Función para medición de potencia de canal en tv digital
-    def dtv_power_measurement(self, impedance: int, transducers: list, channel: int, path: str):
+    def dtv_power_measurement(self, channel: int, path: str):
 
         # Configuración de parámetros
         self.attenuation = 0
         self.preselector = False
-        self.reference_level = 82 if impedance == 50 else 83.75
+        self.reference_level = 82 if self.impedance == 50 else 83.75
 
         self.write_str('INST SAN') # Configura el instrumento al modo "Spectrum Analyzer"
-        self.write_str(f'INP:IMP {impedance}') # Selecciona la entrada según la entrada de la función.
-        for transducer in transducers:
+        self.write_str(f'INP:IMP {self.impedance}') # Selecciona la entrada según la entrada de la función.
+        for transducer in self.transducers:
             self.write_str(f"CORR:TRAN:SEL '{transducer}'") # Selecciona el transductor suministrado por el usuario.
             self.write_str('CORR:TRAN ON') # Activa el transductor seleccionado
         self.write_bool(f'INP:PRES:STAT', {self.preselector}) # Enciende el preselector.
@@ -151,6 +156,14 @@ class EtlManager(InstrumentManager):
         channel_power = self.query_float_with_opc('CALC:MARK:FUNC:POW:RES? MCACpower') # Lectura del nivel de potencia.
         channel_power = round(channel_power,2) # Redondeo a dos cifras decimales
 
+        # Se obtiene la fecha
+        array_date = self.query_str_list_with_opc('SYST:DATE?')
+        date = f'{array_date[0]}/{array_date[1].zfill(2)}/{array_date[2].zfill(2)}'
+
+        # Se obtiene la hora
+        array_hour = self.query_str_list_with_opc('SYST:TIME?')
+        hour = f'{array_hour[0]}:{array_hour[1].zfill(2)}:{array_hour[2].zfill(2)}'
+
         filename = f'{path}/{TV_TABLE[channel]}'
         self.get_screenshot(filename) # Toma de la captura de pantalla
         
@@ -169,7 +182,7 @@ class EtlManager(InstrumentManager):
         
         self.write_str(f'INIT:CONT ON') # Activa la medición contínua
 
-        return {'channel_power': channel_power, 'channel_type': channel_type}
+        return {'date': date, 'hour': hour, 'channel_power': channel_power, 'channel_type': channel_type}
     
 
     # Función para que el programa espere a que se lean todas las variables dentro de cada modo de medición.
@@ -211,7 +224,9 @@ class EtlManager(InstrumentManager):
 
     # Función para medida del modo spectrum en tv digital
     def dtv_spectrum_measurement(self, channel: int, path: str):
-        self.write_str('INST CATV')  # Entrar al modo TV / Radio Analyzer / Receiver.
+        if self.query_str_with_opc('INST?') != 'CATV':
+            self.write_str('INST CATV')  # Entrar al modo TV / Radio Analyzer / Receiver.
+
         self.write_str('CONF:DTV:MEAS DSP')  # Selecciona la ventana Spectrum
         self.write_str('SYST:POS:GPS:DEV PPS2')  # Para que muestre las coordenadas en las imágenes
         self.write_str('DISP:MEAS:OVER:GPS:STAT ON')  # Para que muestre las coordenadas en las imágenes
@@ -237,6 +252,9 @@ class EtlManager(InstrumentManager):
 
     # Función para medida del modo overview en tv digital
     def dtv_overview_measurement(self, channel: int, path: str):
+        if self.query_str_with_opc('INST?') != 'CATV':
+            self.write_str('INST CATV')  # Entrar al modo TV / Radio Analyzer / Receiver.
+        
         self.write_str('CONF:DTV:MEAS OVER')
         self.write_str('DISP:ZOOM:OVER BERLdpc')  # Hacer zoom a la variable BER bef. LDPC.
 
@@ -285,6 +303,9 @@ class EtlManager(InstrumentManager):
 
     # Función para la medida del modo modulation analysis en tv digital
     def dtv_modulation_analysis_measurement(self, channel: int, path: str):
+        if self.query_str_with_opc('INST?') != 'CATV':
+            self.write_str('INST CATV')  # Entrar al modo TV / Radio Analyzer / Receiver.
+
         # Medición en la ventana 'Modulation errors'
         self.write_str('CONF:DTV:MEAS MERR')  # Selecciona la ventana Modulation errors
         self.write_str('DISP:ZOOM:MERR MRPLp') # Zoom a la ariable MER (PLP, RMS)
@@ -336,8 +357,10 @@ class EtlManager(InstrumentManager):
     
 
     # Función para la medida del modo channel analysis en tv digital
-    def dtv_channel_analysis_measurement(self, channel: int, path: str, MRPLp, BERLdpc):
-        
+    def dtv_channel_analysis_measurement(self, channel: int, path: str, BERLdpc, MRPLp):
+        if self.query_str_with_opc('INST?') != 'CATV':
+            self.write_str('INST CATV')  # Entrar al modo TV / Radio Analyzer / Receiver.
+
         # Medición la ventana Echo Pattern.
         self.write_str('CONF:DTV:MEAS EPATtern')
         self.write_str('DISP:LIST:STATE ON') # Desactiva la vista de la lista.
@@ -378,28 +401,83 @@ class EtlManager(InstrumentManager):
         dict_apg.update({'PPATtern': PPATtern})
 
         return dict_apg
-    
+
+
+    # Función para realizar toda la medición de televisión digital
+    def dtv_measurement(self, channel: int, path: str, service_name: str):
+        self.reset()
+        pow_dic = self.dtv_power_measurement(channel, path)
+
+        # Se hace la medición para cada PLP
+        for plp in PLP_SERVICES[service_name]:
+            # Se crea la carpeta de cada PLP
+            plp_path = f'{path}/PLP{plp}'
+            os.mkdir(plp_path)
+
+            # Se verifica que se esté en el modo correcto, en caso contrario, se abre el modo dtv
+            if self.query_str_with_opc('INST?') != 'CATV':
+                self.write_str('INST CATV')  # Entrar al modo TV / Radio Analyzer / Receiver.
+                self.write_str('CONF:DTV:MEAS OVER')
+
+            # Se asignan los PLPs correspondientes al servicio
+            self.write_str('SENS:DDEM:DECP:MODE MAN') # Configuración de selección manual de PLP.
+            self.write_str(f'DDEM:DECP:MAN {plp}') # Selecciona el PLP.
+
+            # Medición en los 4 diferentes modos
+            dsp_dic = self.dtv_spectrum_measurement(channel, plp_path)
+            ovr_dic = self.dtv_overview_measurement(channel, plp_path)
+            mod_dic = self.dtv_modulation_analysis_measurement(channel, plp_path)
+            apg_dic  = self.dtv_channel_analysis_measurement(channel, plp_path, ovr_dic['BERLdpc'], mod_dic['MRPLp'])
+
+            # Se crea el diccionario completo y se añade al diccionario de potencia
+            dtv_result = dsp_dic | ovr_dic | mod_dic | apg_dic
+            pow_dic[f'PLP{plp}'] = dtv_result
+
+            # Se ejecuta la medición de Transport Stream y TxCheck, solo si se logró medida de BER y MER.
+            if ovr_dic['BERLdpc'] != 'ND' and mod_dic['MRPLp'] != 'ND':
+                # Creación del reporte txCheck
+                txcheck = TxCheckManager()
+                txcheck.get_txchech_report(self.instrument_serial_number, dtv_result, plp_path, channel)
+                
+                # Medición de Transport Stream
+                snmp = SNMPManager(self.ip_address, self)
+                snmp.open_remote_desktop()
+                # yield
+                ts_result = snmp.tansport_stream_measurement(channel, plp_path)
+                pow_dic[f'PLP{plp}']['TS'] = ts_result
+
+            os.remove(f'{plp_path}/{TV_TABLE[channel]}_011.png')
+            os.remove(f'{plp_path}/{TV_TABLE[channel]}_012.png')
+            os.remove(f'{plp_path}/{TV_TABLE[channel]}_013.png')
+            os.remove(f'{plp_path}/{TV_TABLE[channel]}_014.png')
+
 
     # Función para medición de televisión analógica
-    def atv_measurement(self, impedance: int, transducers: list, channel: int, path: str):
-        
+    def atv_measurement(self, channel: int, path: str):
+        # Configuración de parámetros
+        self.attenuation = 0
+        self.preselector = False
+        self.reference_level = 82 if self.impedance == 50 else 83.75
+
         self.write_str('INST SAN') # Switches the instrument to "Spectrum Analyzer" mode.
-        for transducer in transducers:
+        for transducer in self.transducers:
             self.write_str(f"CORR:TRAN:SEL '{transducer}'") # Selecciona el transductor suministrado por el usuario.
             self.write_str('CORR:TRAN ON') # Activa el transductor seleccionado
         self.write_str(f'INP:PRES:STAT {self.preselector}') # Enciende el preselector.
         self.write_str('INP:GAIN:STAT OFF') # Apaga el preamplificador.
-        self.write_str(f'INP:IMP {impedance}') # Selecciona la entrada según la entrada de la función.
+        self.write_str(f'INP:IMP {self.impedance}') # Selecciona la entrada según la entrada de la función.
         self.write_str(f'INIT:CONT OFF') # Desactiva la medición contínua
         self.write_str(f'SWE:COUN 10') # Configuración del conteo de barridos a 10.
         self.write_str('DISP:TRAC1:MODE AVER') # Select the average mode for trace 1
         self.write_str('DET RMS') # Select the RMS detector
         self.write_str('CALC:MARK:AOFF') # Switches off all markers.
         self.write_str('FREQ:SPAN 6.5 MHz') # Setting the span
+        self.write_str(f'DISP:TRAC:Y:RLEV {self.reference_level}') # Configura el expected level.
+        self.write_str(f'DISP:TRAC:Y {self.reference_level} dB') # Configura el range log.
         self.write_str('BAND:RES 10 kHz') # Setting the resolution bandwidth
         self.write_str('BAND:VID 30 kHz') # Setting the video bandwidth
         self.write_str('SWE:TIME 500 ms') # Setting the sweeptime
-        self.write_str('INP:ATT 0 dB') # Setting the attenuation
+        self.write_str(f'INP:ATT {self.attenuation} dB') # Configuración de la atenuación
 
         self.write_str(f'FREQ:CENT {TV_TABLE[channel]} MHz')
         self.write_str(f'CALC:MARK1 ON')
@@ -493,7 +571,7 @@ class EtlManager(InstrumentManager):
 
 
     # Función para configuración inicial del banco de mediciones
-    def measurement_bank_setup(self, impedance: int, transducers: list, band: str):
+    def measurement_bank_setup(self, band: str):
 
         # Configuraciones generales para todas las bandas
         self.write_str('INST SAN') # Configura el instrumento al modo "Spectrum Analyzer"
@@ -502,16 +580,16 @@ class EtlManager(InstrumentManager):
         self.write_str(f'INP:GAIN:STAT OFF')
 
         # Configuración por cada banda
-        self.write_str(f'INP:IMP {impedance}') # Selecciona la entrada según la entrada de la función.
+        self.write_str(f'INP:IMP {self.impedance}') # Selecciona la entrada según la entrada de la función.
 
         # Activa los transductores seleccionados si la unidad es dBuV/m
         if BANDS_ETL[band][6] == 'DBUVm':
-            for transducer in transducers:
+            for transducer in self.transducers:
                 self.write_str(f"CORR:TRAN:SEL '{transducer}'") # Selecciona el transductor suministrado por el usuario.
                 self.write_str('CORR:TRAN ON') # Activa el transductor seleccionado
         # En caso contrario, los apaga todos
         else:
-            for transducer in transducers:
+            for transducer in self.transducers:
                 self.write_str(f"CORR:TRAN:SEL '{transducer}'") # Selecciona el transductor suministrado por el usuario.
                 self.write_str('CORR:TRAN OFF') # Apaga el transductor seleccionado
                 self.write_str(f'UNIT:POW {BANDS_ETL[band][6]}') # Configuración de la unidad
@@ -524,7 +602,7 @@ class EtlManager(InstrumentManager):
         self.write_str(f'SWE:TIME:AUTO ON')
         
         # Definición del reference level, según el puerto seleccionado
-        reference_level = 82 if impedance == 50 else 83.75
+        reference_level = 82 if self.impedance == 50 else 83.75
 
         # Ajuste del nivel de referencia, según el puerto seleccionado y la unidad de medida.
         if BANDS_ETL[band][6] in ['DBUV', 'DBUVm']:
@@ -534,9 +612,9 @@ class EtlManager(InstrumentManager):
 
 
     # Función para el banco de mediciones en el modo de obtener solo una traza con el .dat
-    def measurement_bank_one_trace(self, impedance: int, transducers: list, band: str, path: str, latitude: str, longitude: str):
+    def measurement_bank_one_trace(self, band: str, path: str, latitude: str, longitude: str):
         # Configuraciones generales para todas las bandas
-        self.measurement_bank_setup(impedance, transducers, band)
+        self.measurement_bank_setup(band)
 
         # Configuración de la medición
         self.write_str(f'DISP:TRAC1:MODE {BANDS_ETL[band][5]}') # Configuración del modo de traza
@@ -666,12 +744,12 @@ class EtlManager(InstrumentManager):
 
 
     # Función para banco de mediciones en el modo de obtener varias trazas con el .csv
-    def continuous_measurement_bank(self, impedance: int, transducers: list, band: str, path: str, latitude: str, longitude: str):
+    def continuous_measurement_bank(self, band: str, path: str, latitude: str, longitude: str):
 
         # Configuraciones generales para todas las bandas
-        self.measurement_bank_setup(impedance, transducers, band)
+        self.measurement_bank_setup(band)
 
-        sweep_points = 1000
+        sweep_points = 711
         self.write_str(f'SWE:POIN {sweep_points}')
         self.write_str(f'SWE:COUN 0') # Configuración del número de trazas
         self.write_str('DISP:TRAC1:MODE WRIT') # Configuración del modo de traza
@@ -713,8 +791,10 @@ class EtlManager(InstrumentManager):
 
 
 class FPHManager(InstrumentManager):
-    def __init__(self, ip_address: str):
+    def __init__(self, ip_address: str, impedance: int, transducers: list):
         self.ip_address = ip_address
+        self.impedance = impedance
+        self.transducers = transducers
         super().__init__(ip_address)  # Llama al constructor de InstrumentManager
 
 
@@ -782,7 +862,7 @@ class FPHManager(InstrumentManager):
     
     
     # Función para configuración inicial del banco de mediciones
-    def measurement_bank_setup(self, impedance: int, transducers: list, band: str):
+    def measurement_bank_setup(self, band: str):
 
         # Configuraciones generales para todas las bandas
         self.write_str(f'INST SAN') # Configura el instrumento al modo "Spectrum Analyzer"
@@ -791,16 +871,16 @@ class FPHManager(InstrumentManager):
         # self.write_str(f'INP:GAIN:STAT OFF') # Ganancia a 0
 
         # Configuración por cada banda
-        self.write_str(f'INP:IMP {impedance}') # Selecciona la entrada según la entrada de la función.
+        self.write_str(f'INP:IMP {self.impedance}') # Selecciona la entrada según la entrada de la función.
 
         # Activa los transductores seleccionados si la unidad es dBuV/m
         if BANDS_FXH[band][6] == 'DUVM':
-            for tran, transducer in enumerate(transducers):
+            for tran, transducer in enumerate(self.transducers):
                 self.write_str(f"CORR:TRAN{tran + 1}:SEL '{transducer}'") # Selecciona el transductor suministrado por el usuario.
                 self.write_str(f'CORR:TRAN{tran + 1} ON') # Activa el transductor seleccionado
         # En caso contrario, los apaga todos
         else:
-            for transducer in transducers:
+            for transducer in self.transducers:
                 self.write_str(f"CORR:TRAN:SEL '{transducer}'") # Selecciona el transductor suministrado por el usuario.
                 self.write_str('CORR:TRAN OFF') # Apaga el transductor seleccionado
 
@@ -813,7 +893,7 @@ class FPHManager(InstrumentManager):
         self.write_str(f'BAND {BANDS_FXH[band][3]} kHz') # Configuración del resolution bandwidth
         
         # Definición del reference level, según el puerto seleccionado
-        reference_level = 92 if impedance == 50 else 98.80
+        reference_level = 92 if self.impedance == 50 else 98.80
 
         # Ajuste del nivel de referencia, según el puerto seleccionado y la unidad de medida.
         if BANDS_FXH[band][6] in ['DBUV', 'DUVM']:
@@ -823,9 +903,9 @@ class FPHManager(InstrumentManager):
 
 
     # Función para el banco de mediciones en el modo de obtener solo una traza con el .dat
-    def measurement_bank_one_trace(self, impedance: int, transducers: list, band: str, path: str, latitude: str, longitude: str):
+    def measurement_bank_one_trace(self, band: str, path: str, latitude: str, longitude: str):
         # Configuraciones generales para todas las bandas
-        self.measurement_bank_setup(impedance, transducers, band)
+        self.measurement_bank_setup(band)
 
         # Configuración de la medición
         self.write_str(f'DISP:TRAC1:MODE {BANDS_FXH[band][5]}') # Configuración del modo de traza
@@ -954,10 +1034,10 @@ class FPHManager(InstrumentManager):
     
 
     # Función para banco de mediciones en el modo de obtener varias trazas con el .csv
-    def continuous_measurement_bank(self, impedance: int, transducers: list, band: str, path: str, latitude: str, longitude: str):
+    def continuous_measurement_bank(self, band: str, path: str, latitude: str, longitude: str):
 
         # Configuraciones generales para todas las bandas
-        self.measurement_bank_setup(impedance, transducers, band)
+        self.measurement_bank_setup(band)
 
         sweep_points = 711
         self.write_str(f'SWE:POIN {sweep_points}')
