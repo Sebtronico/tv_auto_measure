@@ -27,6 +27,9 @@ class ReadExcel:
         # Corrección de valores diferentes para estaciones no asignadas.
         self.main_channelization.replace('Asignados sin Estación', 'Asignado Sin Estación', inplace=True)
 
+        # Corrección de lectura de city tv, en caso de existir
+        self.addt_channelization.replace('City TV', 'CityTV', inplace=True)
+
         # Separación de la columna de canal regional
         self.separate_regional_channel(self.main_channelization, 'Estación Regional TV Analógica', 'Operador Regional')
         self.separate_regional_channel(self.addt_channelization, 'Estación Regional TV Analógica', 'Operador Regional')
