@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 
 class EtlManager(InstrumentManager):
     def __init__(self, ip_address: str):
+        self.ip_address = ip_address
         super().__init__(ip_address)  # Llama al constructor de InstrumentManager
 
     
@@ -713,6 +714,7 @@ class EtlManager(InstrumentManager):
 
 class FPHManager(InstrumentManager):
     def __init__(self, ip_address: str):
+        self.ip_address = ip_address
         super().__init__(ip_address)  # Llama al constructor de InstrumentManager
 
 
@@ -1000,6 +1002,7 @@ class FPHManager(InstrumentManager):
 
 class MSDManager(InstrumentManager):
     def __init__(self, ip_address: str):
+        self.ip_address = ip_address
         super().__init__(ip_address)  # Llama al constructor de InstrumentManager
 
 
