@@ -438,7 +438,7 @@ class SNMPManager:
 
 
     # Función para le medición SNMP de un PLP
-    def tansport_stream_measurement(self, path: str, channel: int):
+    def tansport_stream_measurement(self, channel: int, path: str):
         """Obtiene un array con todos los resultados de la medición del transport stream para un PLP"""
         # Se selecciona la vista select view
         self.select_view(1)
