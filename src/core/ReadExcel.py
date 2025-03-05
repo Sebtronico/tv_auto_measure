@@ -351,3 +351,20 @@ class ReadExcel:
         excel_station_list = sorted(list(set(excel_station_list)))
         
         return excel_station_list
+    
+if __name__ == '__main__':
+    filename = './tests/Preingenieria Cundinamarca.xlsx'
+    excel = ReadExcel(filename)
+
+    municipio = 'Tenjo'
+    punto = 1
+
+    dictionary = excel.get_dictionary(municipio, punto)
+
+    # sfn = excel.get_sfn(dictionary)
+    # print(sfn)
+
+    seleccion = {16: 'Manjui', 17: 'Manjui', 14: 'Manjui', 15: 'Manjui'}
+
+    dictionary2 = excel.update_sfn(dictionary, seleccion)
+    print(dictionary2)

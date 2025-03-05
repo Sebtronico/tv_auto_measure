@@ -1,14 +1,14 @@
 import asyncio
 from pysnmp.hlapi.v3arch.asyncio import *
 from RemoteDesktopConnector import *
-from InstrumentController import EtlManager
+# from InstrumentController import EtlManager
 import pyautogui
 import time
 from src.utils.constants import *
 
 
 class SNMPManager:
-    def __init__(self, ip_address: str, etl: EtlManager):
+    def __init__(self, ip_address: str, open_ts_analyzer):
         """Inicializa el SNMP Manager con los parámetros básicos"""
         self.ip_address = ip_address
         self.read_community = 'public'
@@ -22,15 +22,20 @@ class SNMPManager:
         asyncio.set_event_loop(self.loop)
         
         # Crea conexión con el controlador SCPI del instrumento
-        self.etl = etl
-        self.etl.write_str('INST TSAN')
+        # from .InstrumentController import EtlManager
+        # self.etl = etl
+        # self.etl = EtlManager(self.ip_address)
+        # self.etl.write_str('INST TSAN')
+        self.open_ts_analyzer = open_ts_analyzer
+        self.open_ts_analyzer()
         while True:
             try:
                 self.get_mac_address()
                 self.snmp_set('1.3.6.1.4.1.2566.127.1.1.157.3.1.2.5.1.3.0.0.0.0.0.1.2', 1) # Apaga el puerto 2
                 break
             except:
-                self.etl.write_str_with_opc('INST TSAN') # Configura el instrumento al modo "TS Analyzer"
+                # self.etl.write_str_with_opc('INST TSAN') # Configura el instrumento al modo "TS Analyzer"
+                self.open_ts_analyzer()
                 continue
 
 
@@ -424,7 +429,8 @@ class SNMPManager:
         self.select_view(1)
 
         while True:
-            self.etl.write_str('INST TSAN') # Configura el instrumento al modo "TS Analyzer"
+            # self.etl.write_str('INST TSAN') # Configura el instrumento al modo "TS Analyzer"
+            self.open_ts_analyzer()
             try: 
                 if pyautogui.locateOnScreen('./resources/ETL.png', region = (300, 80, 360, 150), grayscale = True, confidence = 0.99) is not None:
                     time.sleep(5)
@@ -496,11 +502,12 @@ class SNMPManager:
 
 
 if __name__ == '__main__':
-    etl = EtlManager('172.23.82.39')
-    instrument = SNMPManager('172.23.82.39', etl)
+    from InstrumentController import EtlManager
+    etl = EtlManager('172.23.82.39', 75, [])
+    instrument = SNMPManager('172.23.82.39', etl.open_ts_analyzer)
 
     instrument.open_remote_desktop()
-    plp_result = instrument.tansport_stream_measurement('./tests', 16)
+    plp_result = instrument.tansport_stream_measurement(16, './tests')
     print(plp_result)
     
     # instrument.snmp_measurement()

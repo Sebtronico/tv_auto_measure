@@ -95,7 +95,7 @@ class EtlManager(InstrumentManager):
         for transducer in self.transducers:
             self.write_str(f"CORR:TRAN:SEL '{transducer}'") # Selecciona el transductor suministrado por el usuario.
             self.write_str('CORR:TRAN ON') # Activa el transductor seleccionado
-        self.write_bool(f'INP:PRES:STAT {self.preselector}') # Enciende el preselector.
+        self.write_bool(f'INP:PRES:STAT', self.preselector) # Enciende el preselector.
         self.write_str('INP:GAIN:STAT OFF') # Apaga el preamplificador.
         self.write_str(f'INP:IMP {self.impedance}') # Selecciona la entrada según la entrada de la función.
         self.write_str('CALC:MARK:FUNC:POW:PRES NONE') # Configuración de sin estándar para la medición de potencia en modo ACP 
@@ -126,7 +126,7 @@ class EtlManager(InstrumentManager):
         for transducer in self.transducers:
             self.write_str(f"CORR:TRAN:SEL '{transducer}'") # Selecciona el transductor suministrado por el usuario.
             self.write_str('CORR:TRAN ON') # Activa el transductor seleccionado
-        self.write_bool(f'INP:PRES:STAT', {self.preselector}) # Enciende el preselector.
+        self.write_bool(f'INP:PRES:STAT', self.preselector) # Enciende el preselector.
         self.write_str('INP:GAIN:STAT OFF') # Apaga el preamplificador.
         self.write_str('DISP:TRAC1:MODE AVER') # Selecciona el modo de traza "average" para la traza 1.
         self.write_str('DET RMS') # Selecciona el detector "RMS"
@@ -192,25 +192,25 @@ class EtlManager(InstrumentManager):
         if not parameters:
             raise ValueError(f"Modo de medición '{mode}' no válido")
 
-        header = 'CALC:DTV:RES:APGD?' if mode in {'APHase', 'AGRoup'} else 'CALC:DTV:RES?'
+        header = 'CALC:DTV:RES:APGD?' if mode in ['APHase', 'AGRoup'] else 'CALC:DTV:RES?'
         dict_out = {}
 
         start_time = time.time()
 
         while time.time() - start_time <= seconds:
             if mode == 'OVER':
-                if self.query_str_with_opc(f'{header} PBERldpc') != '10':
+                if self.query_str_with_opc(f'{header} PBERldpc') not in ['10', '---']:
                     continue
 
             for param in parameters:
                 try:
                     value = self.query_str_with_opc(f'{header} {param}')
-                    if value == '---':  # Si sigue sin valor, espera e intenta en el próximo ciclo
-                        continue
-                    dict_out[param] = float(value) if value.replace('.', '', 1).isdigit() else value
+                    dict_out[param] = value
                 except Exception as e:
-                    print(f"Error al consultar {param}: {e}")
+                    # print(f"Error al consultar {param}: {e}")
+                    dict_out[param] = '---'
                     time.sleep(1)
+                    break
 
             if all(value != '---' for value in dict_out.values()):
                 break
@@ -218,6 +218,13 @@ class EtlManager(InstrumentManager):
         # Ajuste especial para 'PERatio'
         if dict_out.get('PERatio') == 'n/a (HEM)':
             dict_out['PERatio'] = 0
+
+        # Se convierten todos los valores posibles a flotante
+        for key, value in dict_out.items():
+            try:
+                dict_out[key] = float(value)
+            except ValueError:
+                continue
 
         return dict_out
     
@@ -336,10 +343,13 @@ class EtlManager(InstrumentManager):
         
         t = time.time()
         while True:
-            result = self.query_str_with_opc('CALC:DTV:RES? MERFrms')  
-            if result != '---':  
-                time.sleep(0.25)
-                break  # Sale del bucle si la condición 1 se cumple
+            try:
+                result = self.query_str_with_opc('CALC:DTV:RES? MERFrms')
+                if result != '---':  
+                    time.sleep(0.25)
+                    break  # Sale del bucle si la condición 1 se cumple
+            except:
+                continue
 
             if time.time() - t >= 10:  
                 break  # Sale del bucle si han pasado 10 segundos
@@ -403,6 +413,11 @@ class EtlManager(InstrumentManager):
         return dict_apg
 
 
+    # Función para abrir el Transport Stream Analyzer
+    def open_ts_analyzer(self):
+        self.write_str('INST TSAN')
+
+
     # Función para realizar toda la medición de televisión digital
     def dtv_measurement(self, channel: int, path: str, service_name: str):
         self.reset()
@@ -411,7 +426,7 @@ class EtlManager(InstrumentManager):
         # Se hace la medición para cada PLP
         for plp in PLP_SERVICES[service_name]:
             # Se crea la carpeta de cada PLP
-            plp_path = f'{path}/PLP{plp}'
+            plp_path = f'{path}/PLP_{plp}'
             os.mkdir(plp_path)
 
             # Se verifica que se esté en el modo correcto, en caso contrario, se abre el modo dtv
@@ -440,7 +455,7 @@ class EtlManager(InstrumentManager):
                 txcheck.get_txchech_report(self.instrument_serial_number, dtv_result, plp_path, channel)
                 
                 # Medición de Transport Stream
-                snmp = SNMPManager(self.ip_address, self)
+                snmp = SNMPManager(self.ip_address, self.open_ts_analyzer)
                 snmp.open_remote_desktop()
                 # yield
                 ts_result = snmp.tansport_stream_measurement(channel, plp_path)
@@ -451,9 +466,13 @@ class EtlManager(InstrumentManager):
             os.remove(f'{plp_path}/{TV_TABLE[channel]}_013.png')
             os.remove(f'{plp_path}/{TV_TABLE[channel]}_014.png')
 
+        return pow_dic
+
 
     # Función para medición de televisión analógica
     def atv_measurement(self, channel: int, path: str):
+        self.reset()
+        
         # Configuración de parámetros
         self.attenuation = 0
         self.preselector = False
@@ -463,7 +482,7 @@ class EtlManager(InstrumentManager):
         for transducer in self.transducers:
             self.write_str(f"CORR:TRAN:SEL '{transducer}'") # Selecciona el transductor suministrado por el usuario.
             self.write_str('CORR:TRAN ON') # Activa el transductor seleccionado
-        self.write_str(f'INP:PRES:STAT {self.preselector}') # Enciende el preselector.
+        self.write_bool(f'INP:PRES:STAT', self.preselector) # Enciende el preselector.
         self.write_str('INP:GAIN:STAT OFF') # Apaga el preamplificador.
         self.write_str(f'INP:IMP {self.impedance}') # Selecciona la entrada según la entrada de la función.
         self.write_str(f'INIT:CONT OFF') # Desactiva la medición contínua
@@ -490,6 +509,10 @@ class EtlManager(InstrumentManager):
         self.write_str(f'CALC:MARK4:X {TV_TABLE[channel] + 3} MHz')
         self.write_str(f'INIT;*WAI')
 
+        # Se obtiene la hora
+        array_hour = self.query_str_list_with_opc('SYST:TIME?')
+        hour = f'{array_hour[0]}:{array_hour[1].zfill(2)}:{array_hour[2].zfill(2)}'
+
         filename = f'{path}/CH_{channel}'
         self.get_screenshot(filename)
         self.get_data_file(filename)
@@ -498,7 +521,8 @@ class EtlManager(InstrumentManager):
             'frequency_video': TV_TABLE[channel] - 1.75,
             'frequency_audio': TV_TABLE[channel] + 2.75,
             'power_video': round(self.query_float_with_opc('CALC:MARK2:Y?'), 2),
-            'power_audio': round(self.query_float_with_opc('CALC:MARK3:Y?'), 2)
+            'power_audio': round(self.query_float_with_opc('CALC:MARK3:Y?'), 2),
+            'hour': hour
         }
 
         return atv_dict

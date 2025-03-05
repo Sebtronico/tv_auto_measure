@@ -2,6 +2,7 @@ from InstrumentController import *
 from src.utils.constants import *
 from collections import defaultdict
 from tkinter import messagebox
+import os
 
 class MeasurementManager:
     def __init__(self, dtv: EtlManager, atv: EtlManager, mbk: EtlManager|FPHManager, rtr: MSDManager|None):
@@ -15,7 +16,7 @@ class MeasurementManager:
         if self.rtr is not None:
             self.rtr.move_rotor(park_acimuth, station_acimuth)
         else:
-            messagebox.showerror(message=f'Gire el rotor hacia el acimuth {station_acimuth}.\n Una vez apuntado, haga click en aceptar.')
+            messagebox.showinfo(message=f'Gire el rotor hacia el acimuth {station_acimuth}.\n Una vez apuntado, haga click en aceptar.')
 
 
     @staticmethod
@@ -24,7 +25,7 @@ class MeasurementManager:
 
         for key, value in dictionary.items():
             tuple_value = tuple(value.items())
-            groups[tuple_value].apend(key)
+            groups[tuple_value].append(key)
 
         result = {tuple(keys): dict(value) for value, keys in groups.items()}
 
@@ -67,7 +68,7 @@ class MeasurementManager:
         return result
     
 
-    def sfn_measurement(self, dictionary: dict, path: str, impedance: int, transducers: list, park_acimuth: int):
+    def sfn_measurement(self, dictionary: dict, path: str, park_acimuth: int):
         """
         Realiza la medición de SFN, devuelve el diccionario de resultados de mayores potencias por canal,
         y guarda la imagen de soporte.
@@ -90,15 +91,15 @@ class MeasurementManager:
             self.dtv.reset()
 
             # Configuración inicial del analizador.
-            self.dtv.sfn_setup(impedance, transducers)
+            self.dtv.sfn_setup()
 
             #
             channels = sorted(list(channels_tuple))
 
             # Creación del archivo .txt
-            filename = f'{path}/SFN_CH{' - '.join(map(str, channels))}'
+            filename = f"{path}/SFN_CH{' - '.join(map(str, channels))}"
             with open(f'{filename}.txt', 'w') as file:
-                file.write(f'Medición SFN de los canales {' - '.join(map(str, channels))}.\n')
+                file.write(f"Medición SFN de los canales {' - '.join(map(str, channels))}.\n")
 
             # Configuración del número de canales que se van a medir
             number_of_channels = len(channels)
@@ -170,3 +171,82 @@ class MeasurementManager:
         final_sfn_result = self._get_max_power_station(sfn_result)
 
         return final_sfn_result
+    
+
+    def tv_measurement(self, dictionary: dict, park_acimuth: int, path: str):
+        photos_path = 'Fotos y videos punto de medición' # Nombre de la carpeta de fotos y videos
+        supports_path = 'Soportes punto de medición' # Nombre de la carpeta de soportes de la medición
+
+        # Se crea la carpeta de entorno
+        os.makedirs(f'{path}/{photos_path}/Entorno', exist_ok=True)
+
+        # Diccionarios de resultado
+        atv_result = {}
+        dtv_result = {}
+
+        # Se recorre el diccionario de medidas
+        for station in dictionary.keys(): 
+            acimuth = dictionary[station]['Acimuth']
+            analog_measurement = dictionary[station]['Analógico']
+            digital_measurement = dictionary[station]['Digital']
+
+            self._rotate(park_acimuth, acimuth)
+
+            # Medición de los canales analógicos para cada estación
+            for service_name, channel in analog_measurement.items():
+                # Definición de los nombres de las carpetas que se crean por cada canal
+                photos_channel_path = f'{path}/{photos_path}/{station}/CH_{channel}_A_{service_name}'
+                supports_channel_path = f'{path}/{supports_path}/{station}/CH_{channel}_A_{service_name}'
+
+                # Creación de las carpetas
+                os.makedirs(photos_channel_path, exist_ok=True)
+                os.makedirs(supports_channel_path, exist_ok=True)
+
+                # Medición
+                atv_channel_result = self.atv.atv_measurement(channel, supports_channel_path)
+                atv_channel_result.update({'station': station, 'service_name': service_name})
+
+                # Se añade al diccionario de resultado
+                atv_result[channel] = atv_channel_result
+
+            # Medición de los canales digitales para cada estación
+            for service_name, channel in digital_measurement.items():
+                # Creación de carpetas
+                for channel_name in TV_SERVICES[service_name]:
+                    photos_channel_path = f'{path}/{photos_path}/{station}/CH_{channel}_D_{service_name}/{channel_name}'
+                    os.makedirs(photos_channel_path, exist_ok=True)
+
+                supports_channel_path = f'{path}/{supports_path}/{station}/CH_{channel}_D_{service_name}'
+                os.makedirs(supports_channel_path, exist_ok=True)
+
+                # Medición
+                dtv_channel_result = self.dtv.dtv_measurement(channel, supports_channel_path, service_name)
+                dtv_channel_result.update({'station': station, 'service_name': service_name})
+
+                # Se añade al diccionario de resultado
+                dtv_result[channel] = dtv_channel_result
+
+        return atv_result, dtv_result
+    
+
+if __name__ == '__main__':
+    atv_instrument = EtlManager('172.23.82.39', 50, ['HE200'])
+    dtv_instrument = EtlManager('172.23.82.39', 75, ['TELEVES', 'CABLE TELEVES'])
+    mbk_instrument = EtlManager('172.23.82.39', 50, ['HL223'])
+    rtr_instrument = None
+
+    measurement_manager = MeasurementManager(atv=atv_instrument, dtv=dtv_instrument, mbk=mbk_instrument, rtr=rtr_instrument)
+
+    # sfn_dic = {16: {'Tibitóc': 61, 'Calatrava': 157, 'Manjui': 254}, 17: {'Tibitóc': 61, 'Calatrava': 157, 'Manjui': 254}, 14: {'Suba': 153, 'Manjui': 254}, 15: {'Suba': 153, 'Manjui': 254}}
+
+    # sfn_result = measurement_manager.sfn_measurement(sfn_dic, './tests', 0)
+    # print(sfn_result)
+
+    diccionario_medicion = {
+        # 'Asignado Sin Estación': {'Acimuth': 0, 'Analógico': {}, 'Digital': {}},
+        # 'Tibitóc': {'Acimuth': 61, 'Analógico': {'Canal 1': 3, 'Canal Institucional': 6, 'Señal Colombia': 12}, 'Digital': {}},
+        # 'Suba': {'Acimuth': 153, 'Analógico': {'RCN': 8, 'Caracol': 10, 'CityTV': 21}, 'Digital': {'CityTV': 27}},
+        # 'Calatrava': {'Acimuth': 157, 'Analógico': {'Teveandina': 23, 'Señal Colombia': 25, 'Canal Capital': 32, 'Canal 1': 36, 'Canal Institucional': 38}, 'Digital': {'Canal Capital': 28}},
+        'Manjui': {'Acimuth': 254, 'Analógico': {'Canal Capital': 2, 'RCN': 4, 'Caracol': 5, 'Canal 1': 7, 'Canal Institucional': 9, 'Señal Colombia': 11}, 'Digital': {'Caracol': 14, 'RCN': 15, 'RTVC': 16, 'Teveandina': 17}}}
+
+    measurement_manager.tv_measurement(diccionario_medicion, 0, './tests')
