@@ -230,9 +230,9 @@ class MeasurementManager:
     
 
 if __name__ == '__main__':
-    atv_instrument = EtlManager('172.23.82.39', 50, ['HE200'])
-    dtv_instrument = EtlManager('172.23.82.39', 75, ['TELEVES', 'CABLE TELEVES'])
-    mbk_instrument = EtlManager('172.23.82.39', 50, ['HL223'])
+    atv_instrument = EtlManager('172.23.82.20', 50, ['HE200'])
+    dtv_instrument = EtlManager('172.23.82.20', 75, ['TELEVES', 'CABLE TELEVES'])
+    mbk_instrument = EtlManager('172.23.82.20', 50, ['HL223'])
     rtr_instrument = None
 
     measurement_manager = MeasurementManager(atv=atv_instrument, dtv=dtv_instrument, mbk=mbk_instrument, rtr=rtr_instrument)
@@ -247,6 +247,12 @@ if __name__ == '__main__':
         # 'Tibitóc': {'Acimuth': 61, 'Analógico': {'Canal 1': 3, 'Canal Institucional': 6, 'Señal Colombia': 12}, 'Digital': {}},
         # 'Suba': {'Acimuth': 153, 'Analógico': {'RCN': 8, 'Caracol': 10, 'CityTV': 21}, 'Digital': {'CityTV': 27}},
         # 'Calatrava': {'Acimuth': 157, 'Analógico': {'Teveandina': 23, 'Señal Colombia': 25, 'Canal Capital': 32, 'Canal 1': 36, 'Canal Institucional': 38}, 'Digital': {'Canal Capital': 28}},
-        'Manjui': {'Acimuth': 254, 'Analógico': {'Canal Capital': 2, 'RCN': 4, 'Caracol': 5, 'Canal 1': 7, 'Canal Institucional': 9, 'Señal Colombia': 11}, 'Digital': {'Caracol': 14, 'RCN': 15, 'RTVC': 16, 'Teveandina': 17}}}
+        # 'Manjui': {'Acimuth': 254, 'Analógico': {'Canal Capital': 2, 'RCN': 4, 'Caracol': 5, 'Canal 1': 7, 'Canal Institucional': 9, 'Señal Colombia': 11}, 'Digital': {'Caracol': 14, 'RCN': 15, 'RTVC': 16, 'Teveandina': 17}}}
+        'Manjui': {'Acimuth': 254, 'Analógico': {'Canal Capital': 2}, 'Digital': {'RTVC': 16}}}
 
-    measurement_manager.tv_measurement(diccionario_medicion, 0, './tests')
+    atv_dic, dtv_dic = measurement_manager.tv_measurement(diccionario_medicion, 0, './tests')
+    print('Diccionario analógico')
+    print(atv_dic)
+    print('\n')
+    print('Diccionario Digital')
+    print(dtv_dic)

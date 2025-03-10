@@ -158,7 +158,7 @@ class EtlManager(InstrumentManager):
 
         # Se obtiene la fecha
         array_date = self.query_str_list_with_opc('SYST:DATE?')
-        date = f'{array_date[0]}/{array_date[1].zfill(2)}/{array_date[2].zfill(2)}'
+        date = f'{array_date[2].zfill(2)}/{array_date[1].zfill(2)}/{array_date[0]}'
 
         # Se obtiene la hora
         array_hour = self.query_str_list_with_opc('SYST:TIME?')
@@ -280,7 +280,7 @@ class EtlManager(InstrumentManager):
         try:
             PLPCodeRate = FEC_TABLE[self.query_with_opc('CALC:DTV:RES:L1Post? DPLP').split(sep=',')[4]] # Obtención de la variable FEC
         except IndexError:
-            PLPCodeRate = '---'
+            PLPCodeRate = FEC_TABLE['---']
 
         dict_over.update({'BERLdpc': BERLdpc, 'GINTerval': GINTerval, 'PLPCodeRate': PLPCodeRate})
 
@@ -329,7 +329,7 @@ class EtlManager(InstrumentManager):
         try:
             cons = MODULATION_TABLE[self.query_with_opc('CALC:DTV:RES:L1Post? DPLP').split(sep=',')[1]] # Obtención de la variable modulación.
         except IndexError:
-            cons = '---'
+            cons = MODULATION_TABLE['---']
 
         FFTMode = FFT_MODE_TABLE[self.query_with_opc('CALC:DTV:RES? FFTMode')] # Obtención de la variable FFT.
 
@@ -346,7 +346,7 @@ class EtlManager(InstrumentManager):
             try:
                 result = self.query_str_with_opc('CALC:DTV:RES? MERFrms')
                 if result != '---':  
-                    time.sleep(0.25)
+                    time.sleep(1)
                     break  # Sale del bucle si la condición 1 se cumple
             except:
                 continue
@@ -379,13 +379,14 @@ class EtlManager(InstrumentManager):
         while True:
             result = self.query_str_with_opc('CALC:DTV:RES:BFIL? EPPV')  
             if result != '---':
-                time.sleep(0.25)
+                time.sleep(1)
                 break  # Sale del bucle si la condición 1 se cumple
 
             if time.time() - t >= 10:  
                 break  # Sale del bucle si han pasado 10 segundos
 
-        PPATtern = self.query_with_opc('CALC:DTV:RES:L1PR? PPATtern') # Obtención de la variable patrón de pilotos.
+        ppat = self.query_with_opc('CALC:DTV:RES:L1PR? PPATtern') # Obtención de la variable patrón de pilotos.
+        PPATtern = 'ND' if  ppat == '---' else ppat
 
         filename = f'{path}/{TV_TABLE[channel]}_008'
         self.get_screenshot(filename) # Toma de captura de pantalla # Toma de captura de pantalla.
@@ -446,7 +447,7 @@ class EtlManager(InstrumentManager):
 
             # Se crea el diccionario completo y se añade al diccionario de potencia
             dtv_result = dsp_dic | ovr_dic | mod_dic | apg_dic
-            pow_dic[f'PLP{plp}'] = dtv_result
+            pow_dic[f'PLP_{plp}'] = dtv_result
 
             # Se ejecuta la medición de Transport Stream y TxCheck, solo si se logró medida de BER y MER.
             if ovr_dic['BERLdpc'] != 'ND' and mod_dic['MRPLp'] != 'ND':
@@ -459,7 +460,7 @@ class EtlManager(InstrumentManager):
                 snmp.open_remote_desktop()
                 # yield
                 ts_result = snmp.tansport_stream_measurement(channel, plp_path)
-                pow_dic[f'PLP{plp}']['TS'] = ts_result
+                pow_dic[f'PLP_{plp}']['TS'] = ts_result
 
             os.remove(f'{plp_path}/{TV_TABLE[channel]}_011.png')
             os.remove(f'{plp_path}/{TV_TABLE[channel]}_012.png')
@@ -567,6 +568,23 @@ class EtlManager(InstrumentManager):
 
         return latitude, longitude
 
+    
+    # Función para obtener la altitud
+    def get_altitude(self):
+        self.write_str('INST CATV')  # Entrar al modo TV / Radio Analyzer / Receiver.
+        self.write_str('CONF:DTV:MEAS OVER')  # Selecciona la ventana Spectrum
+        self.write_str('SYST:POS:GPS:DEV PPS2')  # Para que muestre las coordenadas en las imágenes
+        self.write_str('DISP:MEAS:OVER:GPS:STAT ON')  # Para que muestre las coordenadas en las imágenes
+
+        while True:
+            try:
+                altitude  = self.query_int_with_opc('SYST:POS:ALT?')
+                break
+            except ValueError:
+                continue
+
+        return altitude
+    
 
     # Función para añadir hora y coordenadas al .dat
     def add_to_dat_file(self, filename: str, latitude: str, longitude: str):

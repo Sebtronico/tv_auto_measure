@@ -11,6 +11,7 @@ class TxCheckManager:
         self.workbook = openpyxl.load_workbook(filename = './templates/TxCheck.xlsx') # Apertura de la plantilla del FOR_Registro Monitoreo in Situ TDT.
         self.sheet = self.workbook[self.workbook.sheetnames[0]] # Selección de la hoja 'Registro Monitoreo in Situ TDT'.
 
+
     @staticmethod
     def _fill_color(cell: openpyxl.cell.cell.Cell, performance: float):
         """
@@ -26,12 +27,14 @@ class TxCheckManager:
         color = f'{red}{green}00'
         cell.fill = PatternFill(start_color=color, end_color=color, fill_type="solid")
 
+
     @staticmethod
     def get_index_warnings(letter, index):
         """ Actualiza el índice y la letra de advertencias cuando el índice alcanza 8. """
         next_letters = {'A': 'D', 'D': 'G'}
         return (next_letters.get(letter, letter), 0) if index == 8 else (letter, index + 1)
     
+
     @staticmethod
     def calculate_points(value, key, worst, ideal, weight):
         """ Calcula los puntos basados en la diferencia con el valor ideal. """
@@ -43,12 +46,14 @@ class TxCheckManager:
         
         return max(0, min(points, weight)), value, False  # Asegurar que los puntos estén en el rango permitido
     
+
     @staticmethod
     def calculate_performance(value, ideal, worst):
         """ Calcula el porcentaje de rendimiento. """
         performance = round(100 * (1 - (abs(ideal) - abs(value)) / (abs(ideal) - abs(worst))))
         return max(0, min(performance, 100))
     
+
     def fill_table(self, txcheck_dictionary: dict):
         index_table = 0
         letter_warnings = 'A'
@@ -83,6 +88,7 @@ class TxCheckManager:
             total_performance = int(100*total_points/835)
             self._fill_color(self.sheet['D236'],total_performance)
 
+
     def fill_images(self, folder_path: str, channel: int):
         """ Carga, redimensiona e inserta imágenes en la plantilla según el canal. """
     
@@ -107,6 +113,7 @@ class TxCheckManager:
         for position, img in images.items():
             self.sheet.add_image(img, position)
 
+
     def get_txchech_report(self, serial: str, txcheck_dictionary: dict, folder_path: str, channel: int):
         """ Retorna el reporte de TxCheck. """
         self.sheet[f'H9'] = serial
@@ -119,6 +126,7 @@ class TxCheckManager:
         self.fill_images(folder_path, channel)
 
         self.workbook.save(f'{folder_path}/txCheck1.xlsx')
+
 
 if __name__ == '__main__':
     dic = {'SALower': 14.789680481, 'SAUPper': 8.43473815918, 'LEVel': 60.6906126339,

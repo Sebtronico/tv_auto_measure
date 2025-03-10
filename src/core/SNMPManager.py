@@ -436,8 +436,9 @@ class SNMPManager:
                     time.sleep(5)
                     try:
                         if pyautogui.locateOnScreen('./resources/ETL.png', region = (300, 80, 360, 150), grayscale = True, confidence = 0.99) is not None:
+                            self.open_ts_analyzer()
                             break
-                    except:
+                    except pyautogui.ImageNotFoundException:
                         continue
             except pyautogui.ImageNotFoundException:
                 continue
@@ -503,8 +504,8 @@ class SNMPManager:
 
 if __name__ == '__main__':
     from InstrumentController import EtlManager
-    etl = EtlManager('172.23.82.39', 75, [])
-    instrument = SNMPManager('172.23.82.39', etl.open_ts_analyzer)
+    etl = EtlManager('172.23.82.20', 75, [])
+    instrument = SNMPManager('172.23.82.20', etl.open_ts_analyzer)
 
     instrument.open_remote_desktop()
     plp_result = instrument.tansport_stream_measurement(16, './tests')

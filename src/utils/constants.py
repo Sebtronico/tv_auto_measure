@@ -53,7 +53,7 @@ FEC_TABLE = {
     'R3_4':'3/4',
     'R4_5':'4/4',
     'R5_6':'5/6',
-    '---' :'NA'
+    '---' :'ND'
 }
 
 # Tabla de conversión de los valores de intervalo de guardas.
@@ -65,7 +65,7 @@ GINTERVAL_TABLE = {
     'G1_16'  :'1/16',
     'G1_32'  :'1/32',
     'G1_128' :'1/128',
-    '---'    :'NA'
+    '---'    :'ND'
 }
 
 # Tabla de conversión de los valores de modulación.
@@ -75,7 +75,7 @@ MODULATION_TABLE = {
     'QAM256':'256QAM',
     'QPSK'  :'QPSK',
     'BPSK'  :'BPSK',
-    '---'   :'NA'
+    '---'   :'ND'
 }
 
 # Tabla de conversión de los valores de FFT.
@@ -89,7 +89,7 @@ FFT_MODE_TABLE = {
     'F16E':'16k ext',
     'F32K':'32k',
     'F32E':'32k ext',
-    '---' :'NA'
+    '---' :'ND'
 }
 
 #Definición del diccionario para el procesamiento de la medición de txCheck
