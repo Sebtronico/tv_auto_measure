@@ -67,7 +67,21 @@ class ExcelReport:
     def _get_closest_station_name(self, station: str):
         stations = self.stations['TX_TDT'].tolist()
         if station == "SUBA - RTVC":
-            return "CERRO SUBA - CITYTV"
+            found_station = "CERRO SUBA - CITYTV"
+        elif station == "MUX OSAL - RTVC":
+            found_station = "MUX OSAL - CALI"
+        elif station == "TELEPASTO - RTVC":
+            found_station = "TELEPASTO - TELEPASTO"
+        elif station == "TELESANTIAGO - RTVC":
+            found_station = "TELESANTIAGO - TELESANTIAGO"
+        elif station == "TV IPIALES - RTVC":
+            found_station = "TV IPIALES - TV IPIALES"
+        elif station == "U.DEL PACÍFICO - RTVC":
+            found_station = "U.DEL PACÍFICO - U.DEL PACÍFICO"
+        elif station == "U. DEL VALLE - RTVC":
+            found_station = "U. DEL VALLE - U. DEL VALLE"
+        elif station == "TELEPETROLEO - RTVC":
+            found_station = "TELEPETROLEO - ENLACE TV"
         found_station, score, index = process.extractOne(
             station, stations, scorer=fuzz.ratio)
 
