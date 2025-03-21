@@ -1,7 +1,8 @@
-from InstrumentController import *
+from .InstrumentController import EtlManager, FPHManager, MSDManager
 from src.utils.constants import *
 from collections import defaultdict
-from tkinter import messagebox
+from CTkMessagebox import CTkMessagebox
+# from tkinter import messagebox
 import os
 
 class MeasurementManager:
@@ -15,9 +16,10 @@ class MeasurementManager:
     def _rotate(self, park_acimuth: int, station_acimuth: int):
         if self.rtr is not None:
             self.rtr.move_rotor(park_acimuth, station_acimuth)
+            return True
         else:
-            messagebox.showinfo(message=f'Gire el rotor hacia el acimuth {station_acimuth}.\n Una vez apuntado, haga click en aceptar.')
-
+            return False, station_acimuth
+            
 
     @staticmethod
     def _group_sfn_dictionary(dictionary: dict):
@@ -68,7 +70,7 @@ class MeasurementManager:
         return result
     
 
-    def sfn_measurement(self, dictionary: dict, path: str, park_acimuth: int):
+    def sfn_measurement(self, dictionary: dict, path: str, park_acimuth: int, callback_rotate = None):
         """
         Realiza la medición de SFN, devuelve el diccionario de resultados de mayores potencias por canal,
         y guarda la imagen de soporte.
@@ -82,6 +84,9 @@ class MeasurementManager:
                       14: {'Suba': 153, 'Manjui': 254},
                       15: {'Suba': 153, 'Manjui': 254}}
         """
+        supports_path = 'Soportes punto de medición' # Nombre de la carpeta de soportes de la medición
+        os.makedirs(f'{path}/{supports_path}', exist_ok=True)
+
         sfn_dictionary = self._group_sfn_dictionary(dictionary)
         sfn_result = {}
         
@@ -93,11 +98,11 @@ class MeasurementManager:
             # Configuración inicial del analizador.
             self.dtv.sfn_setup()
 
-            #
+            # Lista ordenada de canales a medir
             channels = sorted(list(channels_tuple))
 
             # Creación del archivo .txt
-            filename = f"{path}/SFN_CH{' - '.join(map(str, channels))}"
+            filename = f"{path}/{supports_path}/SFN_CH{' - '.join(map(str, channels))}"
             with open(f'{filename}.txt', 'w') as file:
                 file.write(f"Medición SFN de los canales {' - '.join(map(str, channels))}.\n")
 
@@ -123,9 +128,18 @@ class MeasurementManager:
                 with open(f'{filename}.txt', 'a') as file:
                     file.write(f'Traza {trace} hacia la estación {station}, en el acimuth {acimuth}°.\n')
 
+                # Intenta rotar la antena
+                rotate_result = self._rotate(park_acimuth, acimuth)
+                
+                # Si se necesita rotación manual
+                if isinstance(rotate_result, tuple) and rotate_result[0] is False:
+                    target_acimuth = rotate_result[1]
+                    
+                    # Si se proporcionó una función callback, la llamamos
+                    if callback_rotate:
+                        callback_rotate(target_acimuth)
 
-                # Se gira el rotor hacia el acimuth de la estación y se activa la traza
-                self._rotate(park_acimuth, acimuth) 
+                # Se activa la traza
                 self.dtv.write_str(f'DISP:TRAC{trace}:MODE AVER')
                 self.dtv.write_str(f'DET{trace} RMS')
                 self.dtv.write_str(f'INIT:CONT OFF')
@@ -173,9 +187,10 @@ class MeasurementManager:
         return final_sfn_result
     
 
-    def tv_measurement(self, dictionary: dict, park_acimuth: int, path: str):
-        photos_path = 'Fotos y videos punto de medición' # Nombre de la carpeta de fotos y videos
-        supports_path = 'Soportes punto de medición' # Nombre de la carpeta de soportes de la medición
+    def tv_measurement(self, dictionary: dict, park_acimuth: int, path: str, 
+                    callback_rotate=None, callback_confirm=None, callback_progress=None):
+        photos_path = 'Fotos y videos punto de medición'
+        supports_path = 'Soportes punto de medición'
 
         # Se crea la carpeta de entorno
         os.makedirs(f'{path}/{photos_path}/Entorno', exist_ok=True)
@@ -183,6 +198,22 @@ class MeasurementManager:
         # Diccionarios de resultado
         atv_result = {}
         dtv_result = {}
+        
+        # Calcular número total de operaciones (para la barra de progreso)
+        total_operations = 0
+        current_operation = 0
+        
+        # Contamos las operaciones totales: una rotación y una medición por cada canal
+        for station in dictionary.keys():
+            total_operations += 1  # Por la rotación de la antena
+            analog_measurement = dictionary[station]['Analógico']
+            digital_measurement = dictionary[station]['Digital']
+            total_operations += len(analog_measurement)  # Por las mediciones analógicas
+            total_operations += len(digital_measurement)  # Por las mediciones digitales
+        
+        # Reportar progreso inicial
+        if callback_progress:
+            callback_progress(current_operation, total_operations, f"Iniciando mediciones...")
 
         # Se recorre el diccionario de medidas
         for station in dictionary.keys(): 
@@ -190,43 +221,146 @@ class MeasurementManager:
             analog_measurement = dictionary[station]['Analógico']
             digital_measurement = dictionary[station]['Digital']
 
-            self._rotate(park_acimuth, acimuth)
+            # Reportar progreso antes de rotar
+            if callback_progress:
+                callback_progress(current_operation, total_operations, 
+                                f"Rotando antena hacia acimuth {acimuth}° para estación {station}...")
 
+            # Intenta rotar la antena
+            rotate_result = self._rotate(park_acimuth, acimuth)
+            
+            # Si se necesita rotación manual
+            if isinstance(rotate_result, tuple) and rotate_result[0] is False:
+                target_acimuth = rotate_result[1]
+                
+                # Si se proporcionó una función callback, la llamamos
+                if callback_rotate:
+                    callback_rotate(target_acimuth)
+            
+            # Incrementar operación y reportar progreso
+            current_operation += 1
+            if callback_progress:
+                callback_progress(current_operation, total_operations, 
+                                f"Rotación completada. Preparando mediciones para {station}...")
+            
             # Medición de los canales analógicos para cada estación
             for service_name, channel in analog_measurement.items():
-                # Definición de los nombres de las carpetas que se crean por cada canal
-                photos_channel_path = f'{path}/{photos_path}/{station}/CH_{channel}_A_{service_name}'
-                supports_channel_path = f'{path}/{supports_path}/{station}/CH_{channel}_A_{service_name}'
+                while True:  # Bucle para repetir la medición si es necesario
+                    # Reportar progreso antes de medir
+                    if callback_progress:
+                        callback_progress(current_operation, total_operations, 
+                                        f"Midiendo canal analógico {channel} ({service_name})...")
+                    
+                    # Definición de los nombres de las carpetas que se crean por cada canal
+                    photos_channel_path = f'{path}/{photos_path}/{station}/CH_{channel}_A_{service_name}'
+                    supports_channel_path = f'{path}/{supports_path}/{station}/CH_{channel}_A_{service_name}'
 
-                # Creación de las carpetas
-                os.makedirs(photos_channel_path, exist_ok=True)
-                os.makedirs(supports_channel_path, exist_ok=True)
+                    # Creación de las carpetas
+                    os.makedirs(photos_channel_path, exist_ok=True)
+                    os.makedirs(supports_channel_path, exist_ok=True)
 
-                # Medición
-                atv_channel_result = self.atv.atv_measurement(channel, supports_channel_path)
-                atv_channel_result.update({'station': station, 'service_name': service_name})
+                    # Medición
+                    atv_channel_result = self.atv.atv_measurement(channel, supports_channel_path)
+                    atv_channel_result.update({'station': station, 'service_name': service_name})
 
-                # Se añade al diccionario de resultado
-                atv_result[channel] = atv_channel_result
+                    # Se añade al diccionario de resultado
+                    atv_result[channel] = atv_channel_result
+                    
+                    # Incrementar operación y reportar progreso
+                    current_operation += 1
+                    if callback_progress:
+                        callback_progress(current_operation, total_operations, 
+                                        f"Medición de canal analógico {channel} ({service_name}) completada.")
+                    
+                    # Solicitar confirmación al usuario
+                    if callback_confirm:
+                        confirm_result = callback_confirm(f"Canal analógico {channel} ({service_name})")
+                        if confirm_result:  # Si el usuario confirma, salimos del bucle while
+                            break
+                        # Si no confirma, se repite el ciclo pero no incrementamos el contador
+                        current_operation -= 1  # Restamos porque vamos a repetir la operación
+                        if callback_progress:
+                            callback_progress(current_operation, total_operations, 
+                                            f"Repitiendo medición del canal analógico {channel} ({service_name})...")
+                    else:
+                        break  # Si no hay callback de confirmación, salimos del bucle
 
             # Medición de los canales digitales para cada estación
             for service_name, channel in digital_measurement.items():
-                # Creación de carpetas
-                for channel_name in TV_SERVICES[service_name]:
-                    photos_channel_path = f'{path}/{photos_path}/{station}/CH_{channel}_D_{service_name}/{channel_name}'
-                    os.makedirs(photos_channel_path, exist_ok=True)
+                while True:  # Bucle para repetir la medición si es necesario
+                    # Reportar progreso antes de medir
+                    if callback_progress:
+                        callback_progress(current_operation, total_operations, 
+                                        f"Midiendo canal digital {channel} ({service_name})...")
+                    
+                    # Creación de carpetas
+                    for channel_name in TV_SERVICES[service_name]:
+                        photos_channel_path = f'{path}/{photos_path}/{station}/CH_{channel}_D_{service_name}/{channel_name}'
+                        os.makedirs(photos_channel_path, exist_ok=True)
 
-                supports_channel_path = f'{path}/{supports_path}/{station}/CH_{channel}_D_{service_name}'
-                os.makedirs(supports_channel_path, exist_ok=True)
+                    supports_channel_path = f'{path}/{supports_path}/{station}/CH_{channel}_D_{service_name}'
+                    os.makedirs(supports_channel_path, exist_ok=True)
 
-                # Medición
-                dtv_channel_result = self.dtv.dtv_measurement(channel, supports_channel_path, service_name)
-                dtv_channel_result.update({'station': station, 'service_name': service_name})
+                    # Medición
+                    dtv_channel_result = self.dtv.dtv_measurement(channel, supports_channel_path, service_name)
+                    dtv_channel_result.update({'station': station, 'service_name': service_name})
 
-                # Se añade al diccionario de resultado
-                dtv_result[channel] = dtv_channel_result
+                    # Se añade al diccionario de resultado
+                    dtv_result[channel] = dtv_channel_result
+                    
+                    # Incrementar operación y reportar progreso
+                    current_operation += 1
+                    if callback_progress:
+                        callback_progress(current_operation, total_operations, 
+                                        f"Medición de canal digital {channel} ({service_name}) completada.")
+                    
+                    # Solicitar confirmación al usuario
+                    if callback_confirm:
+                        confirm_result = callback_confirm(f"Canal digital {channel} ({service_name})")
+                        if confirm_result:  # Si el usuario confirma, salimos del bucle while
+                            break
+                        # Si no confirma, se repite el ciclo pero no incrementamos el contador
+                        current_operation -= 1  # Restamos porque vamos a repetir la operación
+                        if callback_progress:
+                            callback_progress(current_operation, total_operations, 
+                                            f"Repitiendo medición del canal digital {channel} ({service_name})...")
+                    else:
+                        break  # Si no hay callback de confirmación, salimos del bucle
+
+        # Reportar progreso final (100%)
+        if callback_progress:
+            callback_progress(total_operations, total_operations, "¡Medición completada con éxito!")
 
         return atv_result, dtv_result
+    
+
+    def mbk_measurement(self, path, progress_callback = None):
+        try:
+            self.mbk.reset()
+
+            # Se crea la carpeta de soportes
+            os.makedirs(f"{path}")
+
+            # El diccionario de medidas depende del modelo del instrumento
+            bank_dict = BANDS_ETL if self.mbk.instrument_model_name == "ETL" else BANDS_FXH
+            total_bands = len(bank_dict.keys())
+            current_band = 0
+
+            # Se obtienen las coordenadas
+            progress_callback(0, 1, "Obteniendo coordenadas")
+            latitude, longitude = self.mbk.get_coordinates()
+            latitude, longitude = self.mbk.decimal_coords_to_dms(latitude, longitude)
+
+            # Medición y almacenamiento de soportes
+            for band in bank_dict.keys():
+                current_band += 1
+                progress_callback(current_band/total_bands, 1, f"Midiendo la banda {band}")
+                self.mbk.continuous_measurement_bank(band, path, latitude, longitude)
+
+            progress_callback(1, 1, "¡Medición de banco completada con éxito")
+        except Exception as e:
+            progress_callback(1, 1, f"Error en la medición de banco: {str(e)}")
+            raise e
     
 
 if __name__ == '__main__':
@@ -237,22 +371,22 @@ if __name__ == '__main__':
 
     measurement_manager = MeasurementManager(atv=atv_instrument, dtv=dtv_instrument, mbk=mbk_instrument, rtr=rtr_instrument)
 
-    # sfn_dic = {16: {'Tibitóc': 61, 'Calatrava': 157, 'Manjui': 254}, 17: {'Tibitóc': 61, 'Calatrava': 157, 'Manjui': 254}, 14: {'Suba': 153, 'Manjui': 254}, 15: {'Suba': 153, 'Manjui': 254}}
+    sfn_dic = {16: {'Tibitóc': 61, 'Calatrava': 157, 'Manjui': 254}, 17: {'Tibitóc': 61, 'Calatrava': 157, 'Manjui': 254}, 14: {'Suba': 153, 'Manjui': 254}, 15: {'Suba': 153, 'Manjui': 254}}
 
-    # sfn_result = measurement_manager.sfn_measurement(sfn_dic, './tests', 0)
-    # print(sfn_result)
+    sfn_result = measurement_manager.sfn_measurement(sfn_dic, './tests', 0)
+    print(sfn_result)
 
-    diccionario_medicion = {
+    # diccionario_medicion = {
         # 'Asignado Sin Estación': {'Acimuth': 0, 'Analógico': {}, 'Digital': {}},
         # 'Tibitóc': {'Acimuth': 61, 'Analógico': {'Canal 1': 3, 'Canal Institucional': 6, 'Señal Colombia': 12}, 'Digital': {}},
         # 'Suba': {'Acimuth': 153, 'Analógico': {'RCN': 8, 'Caracol': 10, 'CityTV': 21}, 'Digital': {'CityTV': 27}},
         # 'Calatrava': {'Acimuth': 157, 'Analógico': {'Teveandina': 23, 'Señal Colombia': 25, 'Canal Capital': 32, 'Canal 1': 36, 'Canal Institucional': 38}, 'Digital': {'Canal Capital': 28}},
         # 'Manjui': {'Acimuth': 254, 'Analógico': {'Canal Capital': 2, 'RCN': 4, 'Caracol': 5, 'Canal 1': 7, 'Canal Institucional': 9, 'Señal Colombia': 11}, 'Digital': {'Caracol': 14, 'RCN': 15, 'RTVC': 16, 'Teveandina': 17}}}
-        'Manjui': {'Acimuth': 254, 'Analógico': {'Canal Capital': 2}, 'Digital': {'RTVC': 16}}}
+        # 'Manjui': {'Acimuth': 254, 'Analógico': {'Canal Capital': 2}, 'Digital': {'RTVC': 16}}}
 
-    atv_dic, dtv_dic = measurement_manager.tv_measurement(diccionario_medicion, 0, './tests')
-    print('Diccionario analógico')
-    print(atv_dic)
-    print('\n')
-    print('Diccionario Digital')
-    print(dtv_dic)
+    # atv_dic, dtv_dic = measurement_manager.tv_measurement(diccionario_medicion, 0, './tests')
+    # print('Diccionario analógico')
+    # print(atv_dic)
+    # print('\n')
+    # print('Diccionario Digital')
+    # print(dtv_dic)

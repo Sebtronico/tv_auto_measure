@@ -1,7 +1,6 @@
 import asyncio
 from pysnmp.hlapi.v3arch.asyncio import *
-from RemoteDesktopConnector import *
-# from InstrumentController import EtlManager
+from .RemoteDesktopConnector import *
 import pyautogui
 import time
 from src.utils.constants import *

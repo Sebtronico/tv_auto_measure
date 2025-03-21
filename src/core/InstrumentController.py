@@ -1,6 +1,6 @@
-from InstrumentManager import InstrumentManager
-from SNMPManager import SNMPManager
-from TxCheckManager import TxCheckManager
+from .InstrumentManager import InstrumentManager
+from .SNMPManager import SNMPManager
+from .TxCheckManager import TxCheckManager
 from src.utils.constants import *
 import time
 import statistics
@@ -21,6 +21,9 @@ class EtlManager(InstrumentManager):
     def get_screenshot(self, filename: str):
         img_path_instr = 'C:\\R_S\\instr\\user\\screenshot.png' # Ruta y nombre del screenshot en el instrumento
         img_path_pc = f'{filename}.png' # Ruta y nombre del archivo exportado
+
+        self.write_str('HCOP:DEV:COL ON') # Se activan los colores en la captura de pantalla
+        self.write_str('HCOP:CMAP:DEF2') # Se define la paleta de colores para las capturas
 
         self.write_str("HCOP:DEV:LANG PNG") # Definición del formato de la imagen
         self.write_str(f"MMEM:NAME '{img_path_instr}'") # Creación de la imagen en la memoria
@@ -118,7 +121,7 @@ class EtlManager(InstrumentManager):
 
         # Configuración de parámetros
         self.attenuation = 0
-        self.preselector = False
+        self.preselector = True
         self.reference_level = 82 if self.impedance == 50 else 83.75
 
         self.write_str('INST SAN') # Configura el instrumento al modo "Spectrum Analyzer"
@@ -267,7 +270,8 @@ class EtlManager(InstrumentManager):
 
         # Adquisición de parámetros
         dict_over = self.wait_for_variables('OVER', 30) # Se obtienen todos los valores del modo overview para el txcheck
-        BERLdpc = float(dict_over['BERLdpc']) if dict_over['BERLdpc'] != '---' else 'ND'
+        BERLdpc = self.query_str_with_opc('CALC:DTV:RES? BERLdpc')
+        BERLdpc = float(BERLdpc) if BERLdpc != '---' else 'ND'
         
         # Toma de captura de pantalla
         filename = f'{path}/{TV_TABLE[channel]}_003'
@@ -318,7 +322,8 @@ class EtlManager(InstrumentManager):
         self.write_str('DISP:ZOOM:MERR MRPLp') # Zoom a la ariable MER (PLP, RMS)
         
         dict_merr = self.wait_for_variables('MERR', 30)
-        MRPLp = round(float(dict_merr['MRPLp']), 1) if dict_merr['MRPLp'] != '---' else 'ND'
+        MRPLp = self.query_str_with_opc('CALC:DTV:RES? MRPLp')
+        MRPLp = round(float(MRPLp), 1) if MRPLp != '---' else 'ND'
 
         filename = f'{path}/{TV_TABLE[channel]}_002'
         self.get_screenshot(filename) # Toma de captura de pantalla # Toma de captura de pantalla.
@@ -428,7 +433,7 @@ class EtlManager(InstrumentManager):
         for plp in PLP_SERVICES[service_name]:
             # Se crea la carpeta de cada PLP
             plp_path = f'{path}/PLP_{plp}'
-            os.mkdir(plp_path)
+            os.makedirs(plp_path, exist_ok=True)
 
             # Se verifica que se esté en el modo correcto, en caso contrario, se abre el modo dtv
             if self.query_str_with_opc('INST?') != 'CATV':
@@ -476,7 +481,7 @@ class EtlManager(InstrumentManager):
         
         # Configuración de parámetros
         self.attenuation = 0
-        self.preselector = False
+        self.preselector = True
         self.reference_level = 82 if self.impedance == 50 else 83.75
 
         self.write_str('INST SAN') # Switches the instrument to "Spectrum Analyzer" mode.
@@ -493,7 +498,7 @@ class EtlManager(InstrumentManager):
         self.write_str('CALC:MARK:AOFF') # Switches off all markers.
         self.write_str('FREQ:SPAN 6.5 MHz') # Setting the span
         self.write_str(f'DISP:TRAC:Y:RLEV {self.reference_level}') # Configura el expected level.
-        self.write_str(f'DISP:TRAC:Y {self.reference_level} dB') # Configura el range log.
+        # self.write_str(f'DISP:TRAC:Y {self.reference_level} dB') # Configura el range log.
         self.write_str('BAND:RES 10 kHz') # Setting the resolution bandwidth
         self.write_str('BAND:VID 30 kHz') # Setting the video bandwidth
         self.write_str('SWE:TIME 500 ms') # Setting the sweeptime
@@ -512,7 +517,7 @@ class EtlManager(InstrumentManager):
 
         # Se obtiene la hora
         array_hour = self.query_str_list_with_opc('SYST:TIME?')
-        hour = f'{array_hour[0]}:{array_hour[1].zfill(2)}:{array_hour[2].zfill(2)}'
+        hour = f'{array_hour[0].zfill(2)}:{array_hour[1].zfill(2)}'
 
         filename = f'{path}/CH_{channel}'
         self.get_screenshot(filename)
@@ -748,6 +753,14 @@ class EtlManager(InstrumentManager):
 
         plt.savefig(f"{filename}_E.png")
 
+
+    # Función para obtener la fecha del nombre de la carpeta de banco
+    def get_date_for_bank_folder(self):
+        array_date = self.query_str_list_with_opc('SYST:DATE?')
+        date = f"{array_date[0][-2:]}{array_date[1].zfill(2)}{array_date[2].zfill(2)}"
+
+        return date
+    
 
     # Función para obtener las variables que van en el .csv
     def get_variables_for_csv(self, latitude: str, longitude: str):
@@ -1039,6 +1052,14 @@ class FPHManager(InstrumentManager):
         plt.savefig(f"{filename}_E.png")
 
 
+    # Función para obtener la fecha del nombre de la carpeta de banco
+    def get_date_for_bank_folder(self):
+        array_date = self.query_str_list_with_opc('SYST:DATE?')
+        date = f"{array_date[0][-2:]}{array_date[1].zfill(2)}{array_date[2].zfill(2)}"
+
+        return date
+    
+    
     # Función para obtener las variables que van en el .csv
     def get_variables_for_csv(self, latitude: str, longitude: str):
         

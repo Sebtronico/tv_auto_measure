@@ -92,6 +92,16 @@ class ReadExcel:
         return self.main_channelization['Municipio'].tolist()
     
 
+    # Retorna el departamento correspondiente a un municipio
+    def get_department(self, municipality: str):
+        index_municipality = self.main_channelization.index[self.main_channelization['Municipio'] == municipality].tolist()[0]
+        return self.main_channelization.at[index_municipality, 'Departamento']
+
+
+    def get_dane_code(self, municipality: str):
+        index_municipality = self.main_channelization.index[self.main_channelization['Municipio'] == municipality].tolist()[0]
+        return self.main_channelization.at[index_municipality, 'Cód.\nDANE']
+
     # Retorna el número de puntos que hay en un municipio
     def get_number_of_points(self, municipality: str):
         return self.main_coordinates[self.main_coordinates['Municipio'] == municipality]['Pto.'].max()
@@ -356,15 +366,19 @@ if __name__ == '__main__':
     filename = './tests/Preingenieria Cundinamarca.xlsx'
     excel = ReadExcel(filename)
 
-    municipio = 'Tenjo'
+
+    municipio = 'Subachoque'
     punto = 1
 
-    dictionary = excel.get_dictionary(municipio, punto)
+    print(excel.get_dane_code(municipio))
+    # print(type(excel.get_department(municipio)))
+
+    # dictionary = excel.get_dictionary(municipio, punto)
 
     # sfn = excel.get_sfn(dictionary)
     # print(sfn)
 
-    seleccion = {16: 'Manjui', 17: 'Manjui', 14: 'Manjui', 15: 'Manjui'}
+    # seleccion = {16: 'Manjui', 17: 'Manjui', 14: 'Manjui', 15: 'Manjui'}
 
-    dictionary2 = excel.update_sfn(dictionary, seleccion)
-    print(dictionary2)
+    # dictionary2 = excel.update_sfn(dictionary, seleccion)
+    # print(dictionary2)

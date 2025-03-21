@@ -26,7 +26,8 @@ class InstrumentManager(RsInstrument):
                     self._first_instances[ip_address] = self
                 break  # Sale del bucle si la conexión fue exitosa
             except ResourceError as e:
-                print(f'Error al conectar con {resource_string}.')
+                # print(f'Error al conectar con {resource_string}.')
+                pass
 
         # Si la instancia no está en _first_instances, significa que la conexión falló.
         if ip_address not in self._first_instances:
@@ -42,7 +43,7 @@ class InstrumentManager(RsInstrument):
 
         # Verificar IDN antes de escribir comandos
         try:
-            if self.idn_string.split(sep=',')[1] == 'ETL-3':
+            if self.instrument_model_name == 'ETL':
                 self.write('SYST:DISP:UPD ON')
         except Exception as e:
             print(f'Error al verificar IDN o configurar el instrumento: {e}')

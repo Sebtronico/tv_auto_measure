@@ -21,11 +21,11 @@ class ExcelReport:
         self.digital_filename = './templates/FOR_Registro Monitoreo In Situ TDT_V0.xlsm'
 
         # Creación de workbooks de ambos formatos
-        self.wb_analog  = openpyxl.load_workbook(self.analog_filename)
+        self.wb_analog  = openpyxl.load_workbook(self.analog_filename, keep_vba=True)
         self.register_sheet = self.wb_analog[self.wb_analog.sheetnames[0]]
         self.graphical_supports_sheet = self.wb_analog[self.wb_analog.sheetnames[2]]
 
-        self.wb_digital = openpyxl.load_workbook(self.digital_filename)
+        self.wb_digital = openpyxl.load_workbook(self.digital_filename, keep_vba=True)
         self.general_info_sheet = self.wb_digital[self.wb_digital.sheetnames[1]]
         self.channel_template_sheet = self.wb_digital[self.wb_digital.sheetnames[2]]
 
@@ -153,7 +153,7 @@ class ExcelReport:
             elevations = np.array(elevations, dtype=float)
             distances = np.array(distances, dtype=float)
 
-            plt.figure(figsize=(13, 4))
+            plt.figure(figsize=(13.19, 3.35))
             plt.plot(distances, np.nan_to_num(elevations), color='brown')
             plt.fill_between(distances, np.nan_to_num(elevations), color='lightcoral', alpha=0.5)
             plt.xlabel("Distancia [km]")
@@ -289,9 +289,9 @@ class ExcelReport:
         self.register_sheet['U4']  = site_dictionary['instrument_model']
         self.register_sheet['U4']  = site_dictionary['instrument_serial']
 
-        self.register_sheet['R4']  = 'Antena'
-        self.register_sheet['T4']  = site_dictionary['antenna_brand']
-        self.register_sheet['U4']  = site_dictionary['antenna_model']
+        self.register_sheet['R5']  = 'Antena'
+        self.register_sheet['T5']  = site_dictionary['a_antenna_brand']
+        self.register_sheet['U5']  = site_dictionary['a_antenna_model']
 
         # Mediciones de niveles de servicio e interferencias para televisión analógica
         for row, (channel, dic) in enumerate(analog_measurement_dictionary.items(), start=21):
@@ -306,7 +306,7 @@ class ExcelReport:
             elif service_name == 'Canal 1':
                 fix_service_name = 'Canal Uno'
             elif service_name == 'Canal Institucional':
-                fix_service_name = 'C. Institucional'
+                fix_service_name = 'C.Institucional'
             else:
                 fix_service_name = service_name
             
@@ -326,7 +326,7 @@ class ExcelReport:
             point = str(site_dictionary['point']).zfill(2)
             station = dic['station']
             service_name = dic['service_name']
-            img_path = f'{municipality}/P{point}/Soportes punto de medición/{station}/CH{channel}_A_{service_name}/CH_{channel}.png'
+            img_path = f'./results/{municipality}/P{point}/Soportes punto de medición/{station}/CH_{channel}_A_{service_name}/CH_{channel}.png'
 
             img = Image(img_path)
             img.width  = img.width * 0.25
@@ -356,8 +356,8 @@ class ExcelReport:
         self.general_info_sheet['W15'] = site_dictionary['instrument_serial']
 
         self.general_info_sheet['A16'] = 'Antena'
-        self.general_info_sheet['I16'] = site_dictionary['antenna_brand']
-        self.general_info_sheet['Q16'] = site_dictionary['antenna_model']
+        self.general_info_sheet['I16'] = site_dictionary['d_antenna_brand']
+        self.general_info_sheet['Q16'] = site_dictionary['d_antenna_model']
 																																		
         # Características de las estaciones que se reciben en el punto donde se realiza la medición
         station_list = self.get_station_list(digital_measurement_dictionary)
@@ -370,8 +370,8 @@ class ExcelReport:
             img_path = f'./temp/elevation_profile-{station}.png'
 
             img = Image(img_path)
-            img.width  = img.width * 0.84
-            img.height = img.height  * 0.84
+            # img.width  = img.width * 0.80
+            # img.height = img.height  * 0.80
 
             self.general_info_sheet.add_image(img, f'A{rows_for_images[index]}')
 
@@ -386,11 +386,11 @@ class ExcelReport:
         # Se crea una hoja y se llena para cada canal digital medido
         for channel, dic in digital_measurement_dictionary.items():
             self.wb_digital.copy_worksheet(self.channel_template_sheet)
-            channel_sheet = self.wb_digital[self.wb_digital.sheetnames[-5]]
+            channel_sheet = self.wb_digital[self.wb_digital.sheetnames[-1]]
             channel_sheet.title = f'CH{channel}'
 
             # Características de la medición
-            station_name = f"{dic['station']} - CCNP" if dic['service_name'] in ['Caracol', 'RCN'] else f"{dic['station']} - RTVC"
+            station_name = f"{dic['station'].upper()} - CCNP" if dic['service_name'] in ['Caracol', 'RCN'] else f"{dic['station'].upper()} - RTVC"
             station = self._get_closest_station_name(station_name)
             channel_sheet['A8']  = station
             channel_sheet['I8']  = dic['service_name'].upper()
@@ -405,7 +405,7 @@ class ExcelReport:
                 sfn_stations_list.remove(dic['station'])
 
                 for row, sfn_station in enumerate(sfn_stations_list, start=12):
-                    renamed_sfn_station = f'{sfn_station} - CCNP' if dic['service_name'] in ['Caracol', 'RCN'] else f'{sfn_station} - RTVC'
+                    renamed_sfn_station = f'{sfn_station.upper()} - CCNP' if dic['service_name'] in ['Caracol', 'RCN'] else f'{sfn_station.upper()} - RTVC'
                     renamed_sfn_station = self._get_closest_station_name(renamed_sfn_station)
                     channel_sheet[f'A{row}'] = renamed_sfn_station
             except KeyError:
@@ -450,12 +450,12 @@ class ExcelReport:
             service_name = dic['service_name']
             plp = PLP_SERVICES[service_name][0]
             imgs = {
-                'Channel Power': Image(f'{municipality}/P{point}/Soportes punto de medición/{station}/CH{channel}_D_{service_name}/{TV_TABLE[channel]}.png'),
-                'MER':           Image(f'{municipality}/P{point}/Soportes punto de medición/{station}/CH{channel}_D_{service_name}/PLP_{plp}/{TV_TABLE[channel]}_002.png'),
-                'BER':           Image(f'{municipality}/P{point}/Soportes punto de medición/{station}/CH{channel}_D_{service_name}/PLP_{plp}/{TV_TABLE[channel]}_003.png'),
-                'Constelation':  Image(f'{municipality}/P{point}/Soportes punto de medición/{station}/CH{channel}_D_{service_name}/PLP_{plp}/{TV_TABLE[channel]}_001.png'),
-                'Echo Pattern':  Image(f'{municipality}/P{point}/Soportes punto de medición/{station}/CH{channel}_D_{service_name}/PLP_{plp}/{TV_TABLE[channel]}_008.png'),
-                'Shoulders':     Image(f'{municipality}/P{point}/Soportes punto de medición/{station}/CH{channel}_D_{service_name}/PLP_{plp}/{TV_TABLE[channel]}_010.png')
+                'Channel Power': Image(f'./results/{municipality}/P{point}/Soportes punto de medición/{station}/CH_{channel}_D_{service_name}/{TV_TABLE[channel]}.png'),
+                'MER':           Image(f'./results/{municipality}/P{point}/Soportes punto de medición/{station}/CH_{channel}_D_{service_name}/PLP_{plp}/{TV_TABLE[channel]}_002.png'),
+                'BER':           Image(f'./results/{municipality}/P{point}/Soportes punto de medición/{station}/CH_{channel}_D_{service_name}/PLP_{plp}/{TV_TABLE[channel]}_003.png'),
+                'Constelation':  Image(f'./results/{municipality}/P{point}/Soportes punto de medición/{station}/CH_{channel}_D_{service_name}/PLP_{plp}/{TV_TABLE[channel]}_001.png'),
+                'Echo Pattern':  Image(f'./results/{municipality}/P{point}/Soportes punto de medición/{station}/CH_{channel}_D_{service_name}/PLP_{plp}/{TV_TABLE[channel]}_008.png'),
+                'Shoulders':     Image(f'./results/{municipality}/P{point}/Soportes punto de medición/{station}/CH_{channel}_D_{service_name}/PLP_{plp}/{TV_TABLE[channel]}_010.png')
             }
 
             for img in imgs.values():
@@ -465,9 +465,9 @@ class ExcelReport:
             channel_sheet.add_image(imgs['Channel Power'], 'A44') # Se añade la imagen "ChanelPower" a la casilla A44.
             channel_sheet.add_image(imgs['MER'],           'M44') # Se añade la imagen "ModulationErrors" a la casilla M44.
             channel_sheet.add_image(imgs['BER'],           'Z44') # Se añade la imagen "DigitalOverview" a la casilla Z44.
-            channel_sheet.add_image(imgs['Constelation'],  'A64') # Se añade la imagen "Constelation" a la casilla A62.
-            channel_sheet.add_image(imgs['Echo Pattern'],  'M64') # Se añade la imagen "EchoPattern" a la casilla M62.
-            channel_sheet.add_image(imgs['Shoulders'],     'Z64') # Se añade la imagen "Shoulders" a la casilla Z62.
+            channel_sheet.add_image(imgs['Constelation'],  'A63') # Se añade la imagen "Constelation" a la casilla A62.
+            channel_sheet.add_image(imgs['Echo Pattern'],  'M63') # Se añade la imagen "EchoPattern" a la casilla M62.
+            channel_sheet.add_image(imgs['Shoulders'],     'Z63') # Se añade la imagen "Shoulders" a la casilla Z62.
 
 
     def fill_reports(self, site_dictionary: dict, analog_measurement_dictionary: dict, digital_measurement_dictionary: str, sfn_dictionary):
