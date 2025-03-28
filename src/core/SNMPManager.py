@@ -341,7 +341,7 @@ class SNMPManager:
         end_oid = f'{oid}.{end_number}'
 
         start_time = time.time()
-        while self.get_elapsed_time() < MONITORING_TIME or time.time() - start_time < MONITORING_TIME + 10:
+        while self.get_elapsed_time() < MONITORING_TIME and time.time() - start_time < MONITORING_TIME + 10:
             response = self.snmp_bulk_walk_range(start_oid, end_oid)
             log_table.update(response)
 
