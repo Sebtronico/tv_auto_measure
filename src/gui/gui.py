@@ -19,7 +19,7 @@ class DatosCompartidos:
         # Datos de la primera ventana
         self.object_preengeneering = None
         self.municipality = None
-        self.point = None
+        self.point = 0
         self.measurement_dictionary = {}
         self.sfn_dictionary = {}
         
@@ -40,6 +40,7 @@ class DatosCompartidos:
         self.ip_banco = None
         self.puerto_banco = None
         self.transductores_banco = []
+        self.dane_code = None
         
         # Datos de la quinta ventana (Rotor)
         self.rtr_instrument = None
@@ -52,6 +53,9 @@ class DatosCompartidos:
         # Datos de la medición
         self.medicion_completada = False
         self.resultado_medicion = None
+        
+        # Tipo de medición seleccionada
+        self.tipo_medicion = "banco"
 
 class AsistenteInstalacion(ctk.CTk):
     def __init__(self):
@@ -72,14 +76,14 @@ class AsistenteInstalacion(ctk.CTk):
         self.frames = {}
         
         # Crear todas las páginas
-        for F in (VentanaBienvenida, VentanaAnalogica, VentanaDigital, VentanaBandas, 
+        for F in (VentanaSeleccion, VentanaBienvenida, VentanaAnalogica, VentanaDigital, VentanaBandas, 
                   VentanaRotor, VentanaFormulario, VentanaResumen):
             frame = F(self.container, self)
             self.frames[F] = frame
             frame.grid(row=0, column=0, sticky="nsew")
         
         # Mostrar la primera página
-        self.mostrar_ventana(VentanaBienvenida)
+        self.mostrar_ventana(VentanaSeleccion)
     
     def mostrar_ventana(self, cont):
         """Trae al frente la ventana especificada"""
@@ -88,6 +92,61 @@ class AsistenteInstalacion(ctk.CTk):
         # Actualizar la ventana al mostrarla
         if hasattr(frame, 'actualizar'):
             frame.actualizar()
+
+class VentanaSeleccion(ctk.CTkFrame):
+    def __init__(self, parent, controller):
+        ctk.CTkFrame.__init__(self, parent)
+        self.controller = controller
+        
+        # Título
+        titulo = ctk.CTkLabel(self, text="Seleccione el tipo de medición", 
+                             font=ctk.CTkFont(size=24, weight="bold"))
+        titulo.pack(pady=(50, 30), padx=10)
+        
+        # Descripción
+        descripcion = ctk.CTkLabel(self, text="Por favor, seleccione el tipo de medición que desea realizar.",
+                                  font=ctk.CTkFont(size=16))
+        descripcion.pack(pady=(0, 40), padx=20)
+        
+        # Frame para los botones
+        frame_botones = ctk.CTkFrame(self)
+        frame_botones.pack(pady=20, padx=10, fill="x")
+        
+        # Botón Televisión
+        self.btn_television = ctk.CTkButton(frame_botones, text="Televisión", 
+                                         font=ctk.CTkFont(size=16),
+                                         height=50,
+                                         command=self.seleccionar_television)
+        self.btn_television.pack(pady=15, padx=40, fill="x")
+        
+        # Botón Banco de mediciones
+        self.btn_banco = ctk.CTkButton(frame_botones, text="Banco de mediciones", 
+                                     font=ctk.CTkFont(size=16),
+                                     height=50,
+                                     command=self.seleccionar_banco)
+        self.btn_banco.pack(pady=15, padx=40, fill="x")
+        
+        # Botón Televisión y banco
+        self.btn_ambos = ctk.CTkButton(frame_botones, text="Televisión y banco", 
+                                     font=ctk.CTkFont(size=16),
+                                     height=50,
+                                     command=self.seleccionar_ambos)
+        self.btn_ambos.pack(pady=15, padx=40, fill="x")
+    
+    def seleccionar_television(self):
+        """Configurar para medición de televisión y avanzar a la ventana de bienvenida"""
+        self.controller.datos.tipo_medicion = "television"
+        self.controller.mostrar_ventana(VentanaBienvenida)
+    
+    def seleccionar_banco(self):
+        """Configurar para medición de banco y avanzar directamente a la ventana de bandas"""
+        self.controller.datos.tipo_medicion = "banco"
+        self.controller.mostrar_ventana(VentanaBandas)
+    
+    def seleccionar_ambos(self):
+        """Configurar para ambos tipos de medición y avanzar a la ventana de bienvenida"""
+        self.controller.datos.tipo_medicion = "ambos"
+        self.controller.mostrar_ventana(VentanaBienvenida)
 
 class VentanaBienvenida(ctk.CTkFrame):
     def __init__(self, parent, controller):
@@ -139,6 +198,11 @@ class VentanaBienvenida(ctk.CTkFrame):
         
         # Configurar columnas
         frame_listas.columnconfigure(1, weight=1)
+        
+        # Botón para volver a selección
+        self.btn_volver = ctk.CTkButton(self, text="Volver", 
+                                   command=lambda: self.controller.mostrar_ventana(VentanaSeleccion))
+        self.btn_volver.pack(side="bottom", padx=10, pady=(0, 20), anchor="w")
         
         # Botón para avanzar
         self.btn_siguiente = ctk.CTkButton(self, text="Siguiente", 
@@ -647,7 +711,10 @@ class VentanaDigital(ctk.CTkFrame):
     def avanzar(self):
         """Guardar datos y avanzar a la siguiente ventana"""
         # Avanzar a la siguiente ventana
-        self.controller.mostrar_ventana(VentanaBandas)
+        if self.controller.datos.tipo_medicion == "banco" or self.controller.datos.tipo_medicion == "ambos":
+            self.controller.mostrar_ventana(VentanaBandas)
+        else:
+            self.controller.mostrar_ventana(VentanaRotor)
 
 class VentanaBandas(ctk.CTkFrame):
     def __init__(self, parent, controller):
@@ -662,30 +729,6 @@ class VentanaBandas(ctk.CTkFrame):
         # Contenedor principal con scroll - ahora va después del título
         self.main_container = ctk.CTkScrollableFrame(self)
         self.main_container.pack(fill="both", expand=True, padx=10, pady=10)
-        
-        # Frame para la pregunta sobre mediciones
-        frame_pregunta = ctk.CTkFrame(self.main_container)
-        frame_pregunta.pack(pady=10, padx=10, fill="x")
-        
-        # Pregunta sobre mediciones
-        lbl_pregunta = ctk.CTkLabel(frame_pregunta, text="¿Desea realizar banco de mediciones en este punto?")
-        lbl_pregunta.pack(padx=10, pady=5, anchor="w")
-        
-        # Variable para la respuesta
-        self.var_realizar_mediciones = ctk.StringVar(value="no")
-        
-        # Opciones para realizar mediciones
-        rb_mediciones_si = ctk.CTkRadioButton(frame_pregunta, text="Sí", 
-                                           variable=self.var_realizar_mediciones,
-                                           value="si",
-                                           command=self.actualizar_estado_widgets)
-        rb_mediciones_si.pack(padx=30, pady=5, anchor="w")
-        
-        rb_mediciones_no = ctk.CTkRadioButton(frame_pregunta, text="No", 
-                                           variable=self.var_realizar_mediciones,
-                                           value="no",
-                                           command=self.actualizar_estado_widgets)
-        rb_mediciones_no.pack(padx=30, pady=5, anchor="w")
         
         # Frame para selección de instrumento
         self.frame_instrumento = ctk.CTkFrame(self.main_container)
@@ -781,6 +824,27 @@ class VentanaBandas(ctk.CTkFrame):
         # Configurar columnas
         self.frame_conexion.columnconfigure(1, weight=1)
         
+        # Crear siempre los frames para municipio y DANE, pero no mostrarlos aún
+        # Frame para el municipio
+        self.frame_municipio = ctk.CTkFrame(self.main_container)
+        # No hacemos pack aún
+        
+        lbl_municipio = ctk.CTkLabel(self.frame_municipio, text="Nombre del municipio:")
+        lbl_municipio.pack(padx=10, pady=5, anchor="w")
+        
+        self.entry_municipio = ctk.CTkEntry(self.frame_municipio, placeholder_text="Ingrese el municipio")
+        self.entry_municipio.pack(padx=10, pady=5, fill="x")
+        
+        # Frame para el código DANE
+        self.frame_dane = ctk.CTkFrame(self.main_container)
+        # No hacemos pack aún
+        
+        lbl_dane = ctk.CTkLabel(self.frame_dane, text="Código DANE:")
+        lbl_dane.pack(padx=10, pady=5, anchor="w")
+        
+        self.entry_dane = ctk.CTkEntry(self.frame_dane, placeholder_text="Ingrese el código DANE (números)")
+        self.entry_dane.pack(padx=10, pady=5, fill="x")
+        
         # Frame para los botones de navegación - se coloca directamente en el self
         # para que quede siempre en la parte inferior
         frame_botones = ctk.CTkFrame(self)
@@ -799,9 +863,23 @@ class VentanaBandas(ctk.CTkFrame):
         # Inicializar el estado de los widgets
         self.actualizar_estado_widgets()
     
+    def actualizar(self):
+        """Se llama cuando la ventana se muestra"""
+        print(f"Tipo de medición actual: {self.controller.datos.tipo_medicion}")
+        
+        # Mostrar u ocultar frames según el tipo de medición
+        if self.controller.datos.tipo_medicion == 'banco':
+            # Mostrar los frames de municipio y DANE
+            self.frame_municipio.pack(after=self.frame_conexion, pady=10, padx=10, fill="x")
+            self.frame_dane.pack(after=self.frame_municipio, pady=10, padx=10, fill="x")
+        else:
+            # Ocultar los frames
+            self.frame_municipio.pack_forget()
+            self.frame_dane.pack_forget()
+    
     def actualizar_estado_widgets(self):
         """Habilitar o deshabilitar widgets según la selección de realizar mediciones"""
-        estado = "normal" if self.var_realizar_mediciones.get() == "si" else "disabled"
+        estado = "normal" 
         
         # En lugar de intentar configurar el estado de los frames, 
         # configuramos los widgets interactivos individuales
@@ -821,21 +899,6 @@ class VentanaBandas(ctk.CTkFrame):
         # Configurar estado de los checkboxes de transductores
         for cb in self.transductores_widgets:
             cb.configure(state=estado)
-            
-        # Ajustar la visibilidad de los frames si está deshabilitado
-        if estado == "disabled":
-            self.frame_instrumento.pack_forget()
-            self.frame_ip.pack_forget()
-            self.frame_puerto.pack_forget()
-            self.frame_transductores.pack_forget()
-        else:
-            # Asegurarse de que los frames estén visibles en el orden correcto
-            frame_pregunta = self.main_container.winfo_children()[0]
-            
-            self.frame_instrumento.pack(after=frame_pregunta, pady=10, padx=10, fill="x")
-            self.frame_ip.pack(after=self.frame_instrumento, pady=10, padx=10, fill="x")
-            self.frame_puerto.pack(after=self.frame_ip, pady=10, padx=10, fill="x")
-            self.frame_transductores.pack(after=self.frame_puerto, pady=10, padx=10, fill="both", expand=True)
     
     def conectar(self):
         """Simular la conexión con el instrumento para bandas"""
@@ -920,15 +983,35 @@ class VentanaBandas(ctk.CTkFrame):
         else:
             self.lbl_estado.configure(text=f"Error al conectar con {ip}")
         
-        # Rehabilitar el botón solo si las mediciones están habilitadas
-        if self.var_realizar_mediciones.get() == "si":
-            self.btn_conectar.configure(state="normal")
+        # Rehabilitar el botón
+        self.btn_conectar.configure(state="normal")
     
     def avanzar(self):
         """Guardar datos y avanzar a la siguiente ventana"""
-        # Avanzar a la siguiente ventana
-        self.controller.mostrar_ventana(VentanaRotor)
+        # Si tenemos campos de municipio y DANE, validar y guardar
+        if self.controller.datos.tipo_medicion == 'banco':
+            # Validar municipio (solo letras)
+            municipio = self.entry_municipio.get().strip()
+            if not municipio or not all(c.isalpha() or c.isspace() for c in municipio):
+                CTkMessagebox(title="Error", message="El nombre del municipio debe contener solo letras.")
+                return
 
+            # Validar código DANE (solo números enteros)
+            dane_code = self.entry_dane.get().strip()
+            if not dane_code or not dane_code.isdigit():
+                CTkMessagebox(title="Error", message="El código DANE debe ser un número entero.")
+                return
+                
+            # Guardar los valores en el controlador
+            self.controller.datos.municipality = municipio
+            self.controller.datos.dane_code = int(dane_code)
+            
+        # Avanzar a la siguiente ventana
+        if self.controller.datos.tipo_medicion == "television" or self.controller.datos.tipo_medicion == "ambos":
+            self.controller.mostrar_ventana(VentanaRotor)
+        else:
+            self.controller.mostrar_ventana(VentanaResumen)
+        
 class VentanaRotor(ctk.CTkFrame):
     def __init__(self, parent, controller):
         ctk.CTkFrame.__init__(self, parent)
@@ -1424,19 +1507,28 @@ class VentanaResumen(ctk.CTkFrame):
             mbk_parallel = False
             if measurement_manager.mbk is not None:
                 # Definición de la ruta de almacenamiento de soportes para tv
-                dane_code = self.controller.datos.object_preengeneering.get_dane_code(municipality)
                 date = self.controller.datos.site_dictionary['date_for_mbk_folder']
-                storage_path_bank = f"./results/{dane_code}_{date}_{municipality.replace(' ', '-').upper()}_P{point}"
-                
-                if (measurement_manager.mbk.ip_address != measurement_manager.dtv.ip_address):
-                    mbk_parallel = True
 
-                    # Crear segunda barra de progreso para medición paralela
-                    self.progreso_mbk = ctk.CTkProgressBar(self)
-                    self.progreso_mbk.set(0)
-                    self.progreso_mbk.pack(pady=5, padx=20, fill="x")
-                    self.lbl_estado_medicion_mbk = ctk.CTkLabel(self, text="Preparando medición de banco...")
-                    self.lbl_estado_medicion_mbk.pack(pady=2)
+                # Si solo se va a medir banco, se trae el código DANE desde el usuario
+                if self.controller.datos.tipo_medicion == 'banco':
+                    dane_code = self.controller.datos.dane_code
+                    storage_path_bank = f"./results/{dane_code}_{date}_{municipality.replace(' ', '-').upper()}"
+                    
+                # En caso contrario, se obtiene desde la preingeniería
+                else:
+                    dane_code = self.controller.datos.object_preengeneering.get_dane_code(municipality)
+                    storage_path_bank = f"./results/{dane_code}_{date}_{municipality.replace(' ', '-').upper()}_P{point}"
+                
+                if measurement_manager.dtv is not None:
+                    if (measurement_manager.mbk.ip_address != measurement_manager.dtv.ip_address):
+                        mbk_parallel = True
+
+                        # Crear segunda barra de progreso para medición paralela
+                        self.progreso_mbk = ctk.CTkProgressBar(self)
+                        self.progreso_mbk.set(0)
+                        self.progreso_mbk.pack(pady=5, padx=20, fill="x")
+                        self.lbl_estado_medicion_mbk = ctk.CTkLabel(self, text="Preparando medición de banco...")
+                        self.lbl_estado_medicion_mbk.pack(pady=2)
 
             # Actualizar progreso
             progress_callback(0, 1, "Realizando mediciones SFN...")
@@ -1463,47 +1555,58 @@ class VentanaResumen(ctk.CTkFrame):
                 mbk_thread.start()
 
             # Hacer medición de SFN en caso de que sea necesario
-            if self.controller.datos.sfn_dictionary:
-                sfn_selection = measurement_manager.sfn_measurement(
-                    dictionary = self.controller.datos.sfn_dictionary,
-                    path = storage_path_tv,
+            if measurement_manager.atv is not None and measurement_manager.dtv is not None:
+
+                if self.controller.datos.sfn_dictionary:
+                    sfn_selection = measurement_manager.sfn_measurement(
+                        dictionary = self.controller.datos.sfn_dictionary,
+                        path = storage_path_tv,
+                        park_acimuth = self.controller.datos.angulo_actual_rotor,
+                        callback_rotate = manual_rotation_callback
+                    )
+
+                    # Actualizar el diccionario de mediciones
+                    measurement_dictionary = self.controller.datos.object_preengeneering.update_sfn(
+                        self.controller.datos.measurement_dictionary,
+                        sfn_selection
+                    )
+                else:
+                    # Si el diccionario de SFN está vacío, el diccionario de medición es el mismo
+                    measurement_dictionary = self.controller.datos.measurement_dictionary
+
+                # Para pruebas
+                measurement_dictionary = {'Manjuí': {'Acimuth': 254, 'Analógico': {'Canal Capital': 2}, 'Digital': {'RTVC': 16}}}
+
+                # Medición de TV con la barra de progreso
+                atv_result, dtv_result = measurement_manager.tv_measurement(
+                    dictionary = measurement_dictionary,
                     park_acimuth = self.controller.datos.angulo_actual_rotor,
-                    callback_rotate = manual_rotation_callback
+                    path = storage_path_tv,
+                    callback_rotate = manual_rotation_callback,
+                    callback_confirm = confirm_measurement_callback,
+                    callback_progress = progress_callback  # Añadimos el callback de progreso
                 )
 
-                # Actualizar el diccionario de mediciones
-                measurement_dictionary = self.controller.datos.object_preengeneering.update_sfn(
-                    self.controller.datos.measurement_dictionary,
-                    sfn_selection
+                # Actualizar progreso para post-procesamiento
+                progress_callback(0.9, 1, "Generando reportes...")
+
+                print('Site dictionary:')
+                print(self.controller.datos.site_dictionary, '\n')
+                print('Analog measurement dictionary:')
+                print(atv_result, '\n')
+                print('Digital measurement dictionary:')
+                print(dtv_result, '\n')
+                print('SFN dictionary:')
+                print(self.controller.datos.sfn_dictionary, '\n')
+
+                # Llenado de postprocesamiento
+                report = ExcelReport()
+                report.fill_reports(
+                    site_dictionary = self.controller.datos.site_dictionary,
+                    analog_measurement_dictionary = atv_result,
+                    digital_measurement_dictionary = dtv_result,
+                    sfn_dictionary = self.controller.datos.sfn_dictionary
                 )
-            else:
-                # Si el diccionario de SFN está vacío, el diccionario de medición es el mismo
-                measurement_dictionary = self.controller.datos.measurement_dictionary
-
-            # Para pruebas
-            measurement_dictionary = {'Manjuí': {'Acimuth': 254, 'Analógico': {'Canal Capital': 2}, 'Digital': {'RTVC': 16}}}
-
-            # Medición de TV con la barra de progreso
-            atv_result, dtv_result = measurement_manager.tv_measurement(
-                dictionary = measurement_dictionary,
-                park_acimuth = self.controller.datos.angulo_actual_rotor,
-                path = storage_path_tv,
-                callback_rotate = manual_rotation_callback,
-                callback_confirm = confirm_measurement_callback,
-                callback_progress = progress_callback  # Añadimos el callback de progreso
-            )
-
-            # Actualizar progreso para post-procesamiento
-            progress_callback(0.9, 1, "Generando reportes...")
-
-            # Llenado de postprocesamiento
-            report = ExcelReport()
-            report.fill_reports(
-                site_dictionary = self.controller.datos.site_dictionary,
-                analog_measurement_dictionary = atv_result,
-                digital_measurement_dictionary = dtv_result,
-                sfn_dictionary = self.controller.datos.sfn_dictionary
-            )
 
             # Ejecutar mbk_measurement secuencialmente si no es paralelo
             if measurement_manager.mbk is not None and not mbk_parallel:
