@@ -246,7 +246,7 @@ class MeasurementManager:
             # Medición de los canales analógicos para cada estación
             for service_name, channel in analog_measurement.items():
                 while True:  # Bucle para repetir la medición si es necesario
-                    self.atv.reconnect()
+                    # self.atv.reconnect()
                     # Reportar progreso antes de medir
                     if callback_progress:
                         callback_progress(current_operation, total_operations, 
@@ -289,7 +289,7 @@ class MeasurementManager:
             # Medición de los canales digitales para cada estación
             for service_name, channel in digital_measurement.items():
                 while True:  # Bucle para repetir la medición si es necesario
-                    self.dtv.reconnect()
+                    # self.dtv.reconnect()
                     # Reportar progreso antes de medir
                     if callback_progress:
                         callback_progress(current_operation, total_operations, 
