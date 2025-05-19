@@ -23,8 +23,8 @@ class ExcelReport:
 
         # Inicializar Excel y crear objetos de aplicación
         pythoncom.CoInitialize()  # Inicializar COM para subprocesos
-        self.excel = win32.Dispatch("Excel.Application")
-        self.excel.Visible = True  # Trabajar en segundo plano
+        self.excel = win32.gencache.EnsureDispatch("Excel.Application")
+        self.excel.Visible = False  # Trabajar en segundo plano
         self.excel.DisplayAlerts = False  # Desactivar alertas
 
         # Abrimos workbooks
