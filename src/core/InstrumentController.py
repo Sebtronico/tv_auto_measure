@@ -12,7 +12,7 @@ import os
 class EtlManager(InstrumentManager):
     def __init__(self, ip_address: str, impedance: int, transducers: list):
         self.ip_address = ip_address
-        self.impedance = impedance
+        self.impedance = int(impedance)
         self.transducers = transducers
         super().__init__(ip_address)  # Llama al constructor de InstrumentManager
 
@@ -543,7 +543,7 @@ class EtlManager(InstrumentManager):
         lat_min = int(lat_min_dec)
         lat_seg = (lat_min_dec - lat_min) * 60
         lat_direction = "N" if latitude >= 0 else "S"
-        lat_dms = f"{lat_deg}° {lat_min}' {lat_seg:.2f}\" {lat_direction}"
+        lat_dms = f"{lat_deg}° {lat_min}' {lat_seg:.2f}\" {lat_direction}".replace('.', ',')
 
         # Conversión de longitud
         lon_deg = int(abs(longitude))
@@ -551,7 +551,7 @@ class EtlManager(InstrumentManager):
         lon_min = int(lon_min_dec)
         lon_seg = (lon_min_dec - lon_min) * 60
         lon_direction = "E" if longitude >= 0 else "W"
-        lon_dms = f"{lon_deg}° {lon_min}' {lon_seg:.2f}\" {lon_direction}"
+        lon_dms = f"{lon_deg}° {lon_min}' {lon_seg:.2f}\" {lon_direction}".replace('.', ',')
 
         return lat_dms, lon_dms
     
@@ -848,7 +848,7 @@ class EtlManager(InstrumentManager):
 class FPHManager(InstrumentManager):
     def __init__(self, ip_address: str, impedance: int, transducers: list):
         self.ip_address = ip_address
-        self.impedance = impedance
+        self.impedance = int(impedance)
         self.transducers = transducers
         super().__init__(ip_address)  # Llama al constructor de InstrumentManager
 
@@ -891,14 +891,14 @@ class FPHManager(InstrumentManager):
         lat_min = int(latitude[1])
         lat_seg = latitude[2]
         lat_direction = "N" if lat_deg >= 0 else "S"
-        lat_dms = f"{abs(lat_deg)}° {lat_min}' {lat_seg:.2f}\" {lat_direction}"
+        lat_dms = f"{abs(lat_deg)}° {lat_min}' {lat_seg:.2f}\" {lat_direction}".replace('.', ',')
 
         # Conversión de longitud
         lon_deg = int(longitude[0])
         lon_min = int(longitude[1])
         lon_seg = longitude[2]
         lon_direction = "E" if lon_deg >= 0 else "W"
-        lon_dms = f"{abs(lon_deg)}° {lon_min}' {lon_seg:.2f}\" {lon_direction}"
+        lon_dms = f"{abs(lon_deg)}° {lon_min}' {lon_seg:.2f}\" {lon_direction}".replace('.', ',')
 
         return lat_dms, lon_dms
     
