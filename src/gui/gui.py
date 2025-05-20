@@ -1,4 +1,5 @@
 import customtkinter as ctk
+import tkinter as tk
 from CTkMessagebox import CTkMessagebox
 from tkinter import filedialog
 import threading
@@ -7,11 +8,56 @@ from src.core.InstrumentManager import InstrumentManager
 from src.core.InstrumentController import EtlManager, FPHManager, MSDManager
 from src.core.MeasurementManager import MeasurementManager
 from src.core.ExcelReport import ExcelReport
-import os
+import pandas as pd
 
 # Configuración global
 ctk.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
 ctk.set_default_color_theme("./src/gui/custom_theme.json")  # Themes: "blue" (standard), "green", "dark-blue"
+import customtkinter as ctk
+
+class AutocompleteEntry(ctk.CTkEntry):
+    def __init__(self, master, municipios_list, *args, **kwargs):
+        self.var = ctk.StringVar()
+        super().__init__(master, textvariable=self.var, *args, **kwargs)
+
+        self.municipios_list = sorted(municipios_list)
+        self.var.trace_add("write", self.changed)
+
+        self.listbox = None
+
+    def changed(self, *args):
+        pattern = self.var.get().lower()
+        matches = [m for m in self.municipios_list if pattern in m.lower()]
+
+        if matches:
+            if not self.listbox:
+                self.listbox = ctk.CTkToplevel(self)
+                self.listbox.overrideredirect(True)
+                self.listbox.configure(bg="#2b2b2b")  # fondo oscuro para parecerse a CustomTkinter
+                self.listbox.geometry(f"+{self.winfo_rootx()}+{self.winfo_rooty() + self.winfo_height()}")
+
+                self.listbox_list = tk.Listbox(self.listbox, height=5)
+                self.listbox_list.pack()
+                self.listbox_list.bind("<<ListboxSelect>>", self.selection)
+
+            self.listbox_list.delete(0, "end")
+            for item in matches:
+                self.listbox_list.insert("end", item)
+        else:
+            self.close_listbox()
+
+    def selection(self, event):
+        if self.listbox_list.curselection():
+            index = self.listbox_list.curselection()[0]
+            value = self.listbox_list.get(index)
+            self.var.set(value)
+        self.close_listbox()
+
+    def close_listbox(self):
+        if self.listbox:
+            self.listbox.destroy()
+            self.listbox = None
+
 
 class DatosCompartidos:
     """Clase para almacenar todos los datos que se comparten entre ventanas"""
@@ -832,18 +878,22 @@ class VentanaBandas(ctk.CTkFrame):
         lbl_municipio = ctk.CTkLabel(self.frame_municipio, text="Nombre del municipio:")
         lbl_municipio.pack(padx=10, pady=5, anchor="w")
         
-        self.entry_municipio = ctk.CTkEntry(self.frame_municipio, placeholder_text="Ingrese el municipio")
+        # self.entry_municipio = ctk.CTkEntry(self.frame_municipio, placeholder_text="Ingrese el municipio")
+        self.df = pd.read_excel('./src/utils/Referencias.xlsx', sheet_name = 3)
+        municipalities_list = self.df['Municipio - departamento'].tolist()
+
+        self.entry_municipio = AutocompleteEntry(self.frame_municipio, municipios_list=municipalities_list, placeholder_text="Ingrese el municipio")
         self.entry_municipio.pack(padx=10, pady=5, fill="x")
         
         # Frame para el código DANE
-        self.frame_dane = ctk.CTkFrame(self.main_container)
+        # self.frame_dane = ctk.CTkFrame(self.main_container)
         # No hacemos pack aún
         
-        lbl_dane = ctk.CTkLabel(self.frame_dane, text="Código DANE:")
-        lbl_dane.pack(padx=10, pady=5, anchor="w")
+        # lbl_dane = ctk.CTkLabel(self.frame_dane, text="Código DANE:")
+        # lbl_dane.pack(padx=10, pady=5, anchor="w")
         
-        self.entry_dane = ctk.CTkEntry(self.frame_dane, placeholder_text="Ingrese el código DANE (números)")
-        self.entry_dane.pack(padx=10, pady=5, fill="x")
+        # self.entry_dane = ctk.CTkEntry(self.frame_dane, placeholder_text="Ingrese el código DANE (números)")
+        # self.entry_dane.pack(padx=10, pady=5, fill="x")
         
         # Frame para los botones de navegación - se coloca directamente en el self
         # para que quede siempre en la parte inferior
@@ -865,17 +915,17 @@ class VentanaBandas(ctk.CTkFrame):
     
     def actualizar(self):
         """Se llama cuando la ventana se muestra"""
-        print(f"Tipo de medición actual: {self.controller.datos.tipo_medicion}")
+        # print(f"Tipo de medición actual: {self.controller.datos.tipo_medicion}")
         
         # Mostrar u ocultar frames según el tipo de medición
         if self.controller.datos.tipo_medicion == 'banco':
             # Mostrar los frames de municipio y DANE
             self.frame_municipio.pack(after=self.frame_conexion, pady=10, padx=10, fill="x")
-            self.frame_dane.pack(after=self.frame_municipio, pady=10, padx=10, fill="x")
+            # self.frame_dane.pack(after=self.frame_municipio, pady=10, padx=10, fill="x")
         else:
             # Ocultar los frames
             self.frame_municipio.pack_forget()
-            self.frame_dane.pack_forget()
+            # self.frame_dane.pack_forget()
     
     def actualizar_estado_widgets(self):
         """Habilitar o deshabilitar widgets según la selección de realizar mediciones"""
@@ -933,7 +983,8 @@ class VentanaBandas(ctk.CTkFrame):
                 try:
                     # Creación del objeto de conexión
                     mbk_instrument = EtlManager(ip, impedance, transductores)
-
+                    print(impedance)
+                    print(type(impedance))
                     # Actualización de los datos compartidos
                     self.controller.datos.mbk_instrument = mbk_instrument
                     self.controller.datos.ip_bandas = mbk_instrument.ip_address
@@ -991,20 +1042,18 @@ class VentanaBandas(ctk.CTkFrame):
         # Si tenemos campos de municipio y DANE, validar y guardar
         if self.controller.datos.tipo_medicion == 'banco':
             # Validar municipio (solo letras)
-            municipio = self.entry_municipio.get().strip()
-            if not municipio or not all(c.isalpha() or c.isspace() for c in municipio):
-                CTkMessagebox(title="Error", message="El nombre del municipio debe contener solo letras.")
-                return
-
-            # Validar código DANE (solo números enteros)
-            dane_code = self.entry_dane.get().strip()
-            if not dane_code or not dane_code.isdigit():
-                CTkMessagebox(title="Error", message="El código DANE debe ser un número entero.")
+            municipio_departamento = self.entry_municipio.get()
+            if not municipio_departamento:
+                CTkMessagebox(title="Error", message="Ingrese el nombre del municipio.")
                 return
                 
             # Guardar los valores en el controlador
+            municipio = municipio_departamento.split(" - ")[0].strip().upper()
+            dane_code_index = self.df.index[self.df['Municipio - departamento'] == municipio_departamento]
+            dane_code = str(self.df.at[dane_code_index[0], 'DANE']).zfill(5)
+            print(dane_code)
             self.controller.datos.municipality = municipio
-            self.controller.datos.dane_code = int(dane_code)
+            self.controller.datos.dane_code = dane_code
             
         # Avanzar a la siguiente ventana
         if self.controller.datos.tipo_medicion == "television" or self.controller.datos.tipo_medicion == "ambos":
