@@ -84,7 +84,12 @@ class MeasurementManager:
     def load_sfn_progress(path: str):
         filename = f"{path}/savefiles/sfn_progress.json"
         with open(filename, "r") as f:
-            return json.load(f)
+            progress = json.load(f)
+
+        # Convertir las claves del diccionario a enteros
+        progress = {int(k): v for k, v in progress.items()}
+
+        return progress
         
 
     def sfn_measurement(self, dictionary: dict, path: str, park_acimuth: int, callback_rotate = None):
