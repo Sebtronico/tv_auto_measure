@@ -58,7 +58,6 @@ class AutocompleteEntry(ctk.CTkEntry):
             self.listbox.destroy()
             self.listbox = None
 
-
 class DatosCompartidos:
     """Clase para almacenar todos los datos que se comparten entre ventanas"""
     def __init__(self):
@@ -248,12 +247,12 @@ class VentanaBienvenida(ctk.CTkFrame):
         # Botón para volver a selección
         self.btn_volver = ctk.CTkButton(self, text="Volver", 
                                    command=lambda: self.controller.mostrar_ventana(VentanaSeleccion))
-        self.btn_volver.pack(side="bottom", padx=10, pady=(0, 20), anchor="w")
+        self.btn_volver.pack(side="left", padx=10, pady=10)
         
         # Botón para avanzar
         self.btn_siguiente = ctk.CTkButton(self, text="Siguiente", 
                                       command=lambda: self.avanzar())
-        self.btn_siguiente.pack(side="bottom", padx=10, pady=20)
+        self.btn_siguiente.pack(side="right", padx=10, pady=10)
         self.btn_siguiente.configure(state="normal")
     
     def cargar_excel(self):
@@ -793,7 +792,7 @@ class VentanaBandas(ctk.CTkFrame):
                                              value="ETL")
         self.rb_instrumento_etl.pack(padx=30, pady=5, anchor="w")
         
-        self.rb_instrumento_fph = ctk.CTkRadioButton(self.frame_instrumento, text="FPH", 
+        self.rb_instrumento_fph = ctk.CTkRadioButton(self.frame_instrumento, text="FPH/FSH", 
                                              variable=self.var_tipo_instrumento,
                                              value="FPH")
         self.rb_instrumento_fph.pack(padx=30, pady=5, anchor="w")
@@ -902,7 +901,7 @@ class VentanaBandas(ctk.CTkFrame):
         
         # Botón para volver
         btn_volver = ctk.CTkButton(frame_botones, text="Anterior", 
-                               command=lambda: controller.mostrar_ventana(VentanaDigital))
+                               command=lambda: controller.mostrar_ventana(VentanaSeleccion) if self.controller.datos.tipo_medicion == "banco" else controller.mostrar_ventana(VentanaAnalogica))
         btn_volver.pack(side="left", padx=10, pady=10)
         
         # Botón para avanzar
@@ -1051,7 +1050,6 @@ class VentanaBandas(ctk.CTkFrame):
             municipio = municipio_departamento.split(" - ")[0].strip().upper()
             dane_code_index = self.df.index[self.df['Municipio - departamento'] == municipio_departamento]
             dane_code = str(self.df.at[dane_code_index[0], 'DANE']).zfill(5)
-            print(dane_code)
             self.controller.datos.municipality = municipio
             self.controller.datos.dane_code = dane_code
             
@@ -1132,7 +1130,7 @@ class VentanaRotor(ctk.CTkFrame):
         
         # Botón para volver
         btn_volver = ctk.CTkButton(frame_botones, text="Anterior", 
-                               command=lambda: controller.mostrar_ventana(VentanaBandas))
+                               command=lambda: controller.mostrar_ventana(VentanaBandas) if self.controller.datos.tipo_medicion != "television" else controller.mostrar_ventana(VentanaDigital))
         btn_volver.pack(side="left", padx=10, pady=10)
         
         # Botón para avanzar
@@ -1362,7 +1360,7 @@ class VentanaResumen(ctk.CTkFrame):
         
         # Botón para volver
         btn_volver = ctk.CTkButton(frame_botones, text="Anterior", 
-                               command=lambda: controller.mostrar_ventana(VentanaFormulario))
+                               command=lambda: controller.mostrar_ventana(VentanaFormulario) if self.controller.datos.tipo_medicion != "banco" else controller.mostrar_ventana(VentanaBandas))
         btn_volver.pack(side="left", padx=10, pady=10)
         
         # Botón para iniciar medición
@@ -1624,7 +1622,7 @@ class VentanaResumen(ctk.CTkFrame):
                     measurement_dictionary = self.controller.datos.measurement_dictionary
 
                 # Para pruebas
-                measurement_dictionary = {'Manjuí': {'Acimuth': 254, 'Analógico': {'Canal Capital': 2}, 'Digital': {'RTVC': 16}}}
+                # measurement_dictionary = {'Manjuí': {'Acimuth': 254, 'Analógico': {'Canal Capital': 2}, 'Digital': {'RTVC': 16}}}
 
                 # Medición de TV con la barra de progreso
                 atv_result, dtv_result = measurement_manager.tv_measurement(
