@@ -296,8 +296,6 @@ class MeasurementManager:
         # Diccionarios de resultado
         if os.path.exists(f"{path}/savefiles/tv_progress.json"):
             dictionary, atv_result, dtv_result = self.load_tv_progress(path, dictionary)
-            print('El nuevo diccionario es:')
-            print(dictionary)
         else:
             atv_result = {}
             dtv_result = {}

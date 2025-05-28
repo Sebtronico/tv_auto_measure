@@ -6,6 +6,8 @@ import time
 import statistics
 import csv
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import os
 
@@ -210,7 +212,6 @@ class EtlManager(InstrumentManager):
                     value = self.query_str_with_opc(f'{header} {param}')
                     dict_out[param] = value
                 except Exception as e:
-                    # print(f"Error al consultar {param}: {e}")
                     dict_out[param] = '---'
                     time.sleep(1)
                     break
@@ -734,6 +735,7 @@ class EtlManager(InstrumentManager):
 
         # Mostrar las gráficas
         plt.savefig(f"{filename}.png")
+        plt.close()
 
 
     # Función para graficar espectrograma
@@ -752,6 +754,7 @@ class EtlManager(InstrumentManager):
         plt.colorbar(label=f"Potencia [{power_unit}]")
 
         plt.savefig(f"{filename}_E.png")
+        plt.close()
 
 
     # Función para obtener la fecha del nombre de la carpeta de banco
@@ -1032,6 +1035,7 @@ class FPHManager(InstrumentManager):
 
         # Mostrar las gráficas
         plt.savefig(f"{filename}.png")
+        plt.close()
 
 
     # Función para graficar espectrograma
@@ -1050,6 +1054,7 @@ class FPHManager(InstrumentManager):
         plt.colorbar(label=f"Potencia [{power_unit}]")
 
         plt.savefig(f"{filename}_E.png")
+        plt.close()
 
 
     # Función para obtener la fecha del nombre de la carpeta de banco

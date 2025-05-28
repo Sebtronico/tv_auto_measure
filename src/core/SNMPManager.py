@@ -2,8 +2,13 @@ import asyncio
 from pysnmp.hlapi.v3arch.asyncio import *
 from .RemoteDesktopConnector import *
 import pyautogui
+import sys
+import os
+import shutil
+import tempfile
 import time
 from src.utils.constants import *
+from utils import rpath
 
 
 class SNMPManager:
@@ -431,12 +436,16 @@ class SNMPManager:
         while True:
             # self.etl.write_str('INST TSAN') # Configura el instrumento al modo "TS Analyzer"
             self.open_ts_analyzer()
+            src = rpath('./resources/ETL.png')
+            etlpng_temp = os.path.join(tempfile.gettempdir(), os.path.basename('./resources/ETL.png'))
+            shutil.copy(src, etlpng_temp)
             try: 
-                if pyautogui.locateOnScreen('./resources/ETL.png', region = (300, 80, 360, 150), grayscale = True, confidence = 0.99) is not None:
+                if pyautogui.locateOnScreen(etlpng_temp, region = (300, 80, 360, 150), grayscale = True, confidence = 0.99) is not None:
                     time.sleep(5)
                     try:
-                        if pyautogui.locateOnScreen('./resources/ETL.png', region = (300, 80, 360, 150), grayscale = True, confidence = 0.99) is not None:
+                        if pyautogui.locateOnScreen(etlpng_temp, region = (300, 80, 360, 150), grayscale = True, confidence = 0.99) is not None:
                             self.open_ts_analyzer()
+                            os.remove(etlpng_temp)
                             break
                     except pyautogui.ImageNotFoundException:
                         continue

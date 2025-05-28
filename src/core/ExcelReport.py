@@ -1,31 +1,35 @@
 import pandas as pd
 from rapidfuzz import process, fuzz
-import rasterio
-from rasterio.plot import show
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from shapely.geometry import LineString
 from pyproj import Transformer
-import geopandas as gpd
-from shapely.geometry import Point, LineString
 import datetime
 from src.utils.constants import *
 import os
 import shutil
 import win32com.client as win32
 import pythoncom
+import pywintypes
 import time
+from utils import rpath
+import geopandas as gpd
+from shapely.geometry import Point, LineString
+import rasterio
+from rasterio.plot import show
 
 class ExcelReport:
     def __init__(self):
-        self.analog_filename = './templates/FOR_Registro Monitoreo In Situ TV Analógica_V0.xlsm'
-        self.digital_filename = './templates/FOR_Registro Monitoreo In Situ TDT_V0.xlsm'
+        self.analog_filename = rpath('./templates/FOR_Registro Monitoreo In Situ TV Analógica_V0.xlsm')
+        self.digital_filename = rpath('./templates/FOR_Registro Monitoreo In Situ TDT_V0.xlsm')
 
         # Inicializar Excel y crear objetos de aplicación
-        pythoncom.CoInitialize()  # Inicializar COM para subprocesos
+        # pythoncom.CoInitialize()  # Inicializar COM para subprocesos
         self.excel = win32.gencache.EnsureDispatch("Excel.Application")
         self.excel.Visible = False  # Trabajar en segundo plano
         self.excel.DisplayAlerts = False  # Desactivar alertas
+        self.excel.EnableEvents = False
 
         # Abrimos workbooks
         self.wb_analog = self.excel.Workbooks.Open(os.path.abspath(self.analog_filename))
@@ -37,7 +41,7 @@ class ExcelReport:
         self.channel_template_sheet = self.wb_digital.Worksheets("Template")
 
         # Cargue de archivo de referencias
-        self.filename_references = './src/utils/Referencias.xlsx'
+        self.filename_references = rpath('./src/utils/Referencias.xlsx')
         self.stations = pd.read_excel(self.filename_references, sheet_name=2)
 
     def __del__(self):
@@ -94,7 +98,7 @@ class ExcelReport:
         point_coord = (lat_point, lon_point)
 
         # Cargue del archivo DEM
-        dem_file = "./resources/SRTM_30_Col1.tif"
+        dem_file = rpath("./resources/SRTM_30_Col1.tif")
         with rasterio.open(dem_file) as dem:
             dem_crs = dem.crs  # Obtener CRS del DEM
 
@@ -146,10 +150,8 @@ class ExcelReport:
                             else:
                                 distances.append(0)
                         else:
-                            print(f"Punto fuera de límites: {x}, {y}")
                             elevations.append(None)
                     except Exception as e:
-                        print(f"Error procesando el punto ({x}, {y}): {e}")
                         elevations.append(None)
 
             # Graficar el perfil de elevación
@@ -164,7 +166,7 @@ class ExcelReport:
             plt.grid()
             plt.xlim(min(distances), max(distances))
             plt.ylim(min(elevations) * 0.9, max(elevations) * 1.05)
-            plt.savefig(f"./temp/elevation_profile-{station}.png", dpi=300, bbox_inches="tight", pad_inches=0.25)
+            plt.savefig(rpath(f"./temp/elevation_profile-{station}.png"), dpi=300, bbox_inches="tight", pad_inches=0.25)
             plt.close()
 
     def plot_distances_image(self, lat_point: float, lon_point: float, station_list: list):
@@ -186,12 +188,13 @@ class ExcelReport:
 
         # Creación de líneas y punto
         colors = ['blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black', 'white']
+
         lines = gpd.GeoDataFrame({'color': [colors[i] for i in range(len(station_list))], 'name': station_list},
                                 geometry=geometries, crs='EPSG:4326')
         point = gpd.GeoDataFrame({'name': ['Punto de medición']}, geometry=[Point(point_coord)], crs='EPSG:4326')
 
         # Cargar el archivo raster del mapa base
-        raster_path = './resources/Colombia_Satelital.tif'  # Ruta al archivo raster descargado
+        raster_path = rpath('./resources/Colombia_Satelital.tif')  # Ruta al archivo raster descargado
         with rasterio.open(raster_path) as src:
             # Reproyectar las capas al CRS del raster
             lines = lines.to_crs(src.crs)
@@ -263,7 +266,7 @@ class ExcelReport:
             ax.axis('off')
 
             # Guardar el mapa como archivo de imagen
-            plt.savefig('./temp/distances.png', dpi=300, bbox_inches='tight', pad_inches=0)
+            plt.savefig(rpath('./temp/distances.png'), dpi=300, bbox_inches='tight', pad_inches=0)
             plt.close()
 
     def fill_register_sheet(self, site_dictionary: dict, analog_measurement_dictionary: dict):
@@ -330,7 +333,7 @@ class ExcelReport:
                 point = str(site_dictionary['point']).zfill(2)
                 station = dic['station']
                 service_name = dic['service_name']
-                img_path = f'./results/{municipality}/P{point}/Soportes punto de medición/{station}/CH_{channel}_A_{service_name}/CH_{channel}.png'
+                img_path = rpath(f'./results/{municipality}/P{point}/Soportes punto de medición/{station}/CH_{channel}_A_{service_name}/CH_{channel}.png')
 
                 # Verifica que la imagen existe
                 if os.path.exists(img_path):
@@ -391,7 +394,7 @@ class ExcelReport:
         rows_for_images = [72, 76, 80, 84, 88, 92, 97, 101]
         for index, station in enumerate(station_list):
             if index < len(rows_for_images):
-                img_path = f'./temp/elevation_profile-{station}.png'
+                img_path = rpath(f'./temp/elevation_profile-{station}.png')
                 
                 if os.path.exists(img_path):
                     # Calcular posición
@@ -410,7 +413,7 @@ class ExcelReport:
                     )
 
         # Distancias desde el punto de medición a las estaciones monitoreadas
-        distance_img_path = './temp/distances.png'
+        distance_img_path = rpath('./temp/distances.png')
         if os.path.exists(distance_img_path):
             # Calcular posición para la imagen de distancias
             left = self.general_info_sheet.Range("A105").Left
@@ -548,12 +551,12 @@ class ExcelReport:
             
             # Rutas de las imágenes
             img_paths = {
-                'Channel Power': f'./results/{municipality}/P{point}/Soportes punto de medición/{station}/CH_{channel}_D_{service_name}/{TV_TABLE[channel]}.png',
-                'MER': f'./results/{municipality}/P{point}/Soportes punto de medición/{station}/CH_{channel}_D_{service_name}/PLP_{plp}/{TV_TABLE[channel]}_002.png',
-                'BER': f'./results/{municipality}/P{point}/Soportes punto de medición/{station}/CH_{channel}_D_{service_name}/PLP_{plp}/{TV_TABLE[channel]}_003.png',
-                'Constelation': f'./results/{municipality}/P{point}/Soportes punto de medición/{station}/CH_{channel}_D_{service_name}/PLP_{plp}/{TV_TABLE[channel]}_001.png',
-                'Echo Pattern': f'./results/{municipality}/P{point}/Soportes punto de medición/{station}/CH_{channel}_D_{service_name}/PLP_{plp}/{TV_TABLE[channel]}_008.png',
-                'Shoulders': f'./results/{municipality}/P{point}/Soportes punto de medición/{station}/CH_{channel}_D_{service_name}/PLP_{plp}/{TV_TABLE[channel]}_010.png'
+                'Channel Power': rpath(f'./results/{municipality}/P{point}/Soportes punto de medición/{station}/CH_{channel}_D_{service_name}/{TV_TABLE[channel]}.png'),
+                'MER': rpath(f'./results/{municipality}/P{point}/Soportes punto de medición/{station}/CH_{channel}_D_{service_name}/PLP_{plp}/{TV_TABLE[channel]}_002.png'),
+                'BER': rpath(f'./results/{municipality}/P{point}/Soportes punto de medición/{station}/CH_{channel}_D_{service_name}/PLP_{plp}/{TV_TABLE[channel]}_003.png'),
+                'Constelation': rpath(f'./results/{municipality}/P{point}/Soportes punto de medición/{station}/CH_{channel}_D_{service_name}/PLP_{plp}/{TV_TABLE[channel]}_001.png'),
+                'Echo Pattern': rpath(f'./results/{municipality}/P{point}/Soportes punto de medición/{station}/CH_{channel}_D_{service_name}/PLP_{plp}/{TV_TABLE[channel]}_008.png'),
+                'Shoulders': rpath(f'./results/{municipality}/P{point}/Soportes punto de medición/{station}/CH_{channel}_D_{service_name}/PLP_{plp}/{TV_TABLE[channel]}_010.png')
             }
             
             # Celdas donde se insertarán las imágenes
@@ -599,39 +602,49 @@ class ExcelReport:
         digital_station_list = self.get_station_list(digital_measurement_dictionary)
 
         # Generación de gráficas de perfiles y distancias
-        os.makedirs('./temp', exist_ok=True)
+        os.makedirs(rpath('./temp'), exist_ok=True)
         self.plot_elevation_profile(lat_point, lon_point, digital_station_list)
         self.plot_distances_image(lat_point, lon_point, digital_station_list)
 
-        # Llenado de postprocesamiento anaógico
-        self.fill_register_sheet(site_dictionary, analog_measurement_dictionary)
-        self.fill_graphical_support_sheet(site_dictionary, analog_measurement_dictionary)
+        for _ in range(5):
+            try:
+                # Llenado de postprocesamiento anaógico
+                self.fill_register_sheet(site_dictionary, analog_measurement_dictionary)
+                self.fill_graphical_support_sheet(site_dictionary, analog_measurement_dictionary)
 
-        # Llenado del postprocesamiento tdt.
-        self.fill_general_info_sheet(site_dictionary, digital_measurement_dictionary)
-        self.fill_channel_sheet(site_dictionary, digital_measurement_dictionary, sfn_dictionary)
+                # Llenado del postprocesamiento tdt.
+                self.fill_general_info_sheet(site_dictionary, digital_measurement_dictionary)
+                self.fill_channel_sheet(site_dictionary, digital_measurement_dictionary, sfn_dictionary)
 
-        # Eliminar hoja de plantilla del formato TDT
-        self.wb_digital.Worksheets("Template").Delete()
+                # Eliminar hoja de plantilla del formato TDT
+                self.wb_digital.Worksheets("Template").Delete()
+
+                break
+
+            except pywintypes.com_error:
+                pythoncom.PumpWaitingMessages()
+                time.sleep(0.5)
+            
 
         # Guardado de archivos.
         municipality = site_dictionary['municipality']
         point = str(site_dictionary['point']).zfill(2)
         
         # Rutas para guardar los archivos
-        analog_save_path = os.path.abspath(f'./results/{municipality}/P{point}/FOR_Registro Monitoreo In Situ TV Analógica_V0_P{point}.xlsm')
-        digital_save_path = os.path.abspath(f'./results/{municipality}/P{point}/FOR_Registro Monitoreo In Situ TDT_V0_P{point}.xlsm')
+        analog_save_path = os.path.abspath(rpath(f'./results/{municipality}/P{point}/FOR_Registro Monitoreo In Situ TV Analógica_V0_P{point}.xlsm'))
+        digital_save_path = os.path.abspath(rpath(f'./results/{municipality}/P{point}/FOR_Registro Monitoreo In Situ TDT_V0_P{point}.xlsm'))
         
         # Guardar los workbooks
         self.wb_analog.SaveAs(analog_save_path)
         self.wb_digital.SaveAs(digital_save_path)
         
         # Limpiar los archivos temporales
-        shutil.rmtree('./temp')
+        shutil.rmtree(rpath('./temp'))
         
         # Opcional: cerrar los archivos si ya no se van a utilizar
         self.wb_analog.Close(SaveChanges=False)
         self.wb_digital.Close(SaveChanges=False)
+        self.excel.Quit()
 
 if __name__ == "__main__":
     # Ejemplo de uso

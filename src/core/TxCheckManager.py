@@ -5,10 +5,11 @@ import openpyxl.cell
 from openpyxl.drawing.image import Image
 from openpyxl.styles import PatternFill
 from src.utils.constants import *
+from utils import rpath
 
 class TxCheckManager:
     def __init__(self):
-        self.workbook = openpyxl.load_workbook(filename = './templates/TxCheck.xlsx') # Apertura de la plantilla del FOR_Registro Monitoreo in Situ TDT.
+        self.workbook = openpyxl.load_workbook(filename = rpath('./templates/TxCheck.xlsx')) # Apertura de la plantilla del FOR_Registro Monitoreo in Situ TDT.
         self.sheet = self.workbook[self.workbook.sheetnames[0]] # Selección de la hoja 'Registro Monitoreo in Situ TDT'.
 
 
@@ -64,10 +65,6 @@ class TxCheckManager:
             value = txcheck_dictionary[key]
 
             points, value, problematic = self.calculate_points(value, key, worst, ideal, weight)
-
-            if problematic:
-                print(key, value, 'Entré en el ciclo problemático')
-
             performance = self.calculate_performance(value, ideal, worst)
 
             if points == 0:

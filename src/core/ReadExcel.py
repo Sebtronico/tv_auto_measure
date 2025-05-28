@@ -1,6 +1,7 @@
 import pandas as pd
 from collections import OrderedDict
 from src.utils.constants import *
+from utils import rpath
 
 class ReadExcel:
     def __init__(self, filename: str):
@@ -13,7 +14,7 @@ class ReadExcel:
         self.addt_coordinates    = pd.read_excel(filename, sheet_name = 3, skiprows = 0)
 
         # Cargue de archivo de referencias
-        self.filename_references = './src/utils/Referencias.xlsx'
+        self.filename_references = rpath('./src/utils/Referencias.xlsx')
         self.regionals = pd.read_excel(self.filename_references, sheet_name = 0)
         self.engineers = pd.read_excel(self.filename_references, sheet_name = 1)
         self.stations  = pd.read_excel(self.filename_references, sheet_name = 2)

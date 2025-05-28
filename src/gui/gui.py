@@ -9,10 +9,12 @@ from src.core.InstrumentController import EtlManager, FPHManager, MSDManager
 from src.core.MeasurementManager import MeasurementManager
 from src.core.ExcelReport import ExcelReport
 import pandas as pd
+import pythoncom
+from utils import rpath
 
 # Configuración global
 ctk.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
-ctk.set_default_color_theme("./src/gui/custom_theme.json")  # Themes: "blue" (standard), "green", "dark-blue"
+ctk.set_default_color_theme(rpath("./src/gui/custom_theme.json"))  # Themes: "blue" (standard), "green", "dark-blue"
 import customtkinter as ctk
 
 class AutocompleteEntry(ctk.CTkEntry):
@@ -109,7 +111,10 @@ class AsistenteInstalacion(ctk.CTk):
         # Configuración de la ventana principal
         self.title("Automatización de medición")
         self.geometry("510x650")
-        
+
+        # Configuración del logo de la ventana
+        self.iconbitmap(rpath("./resources/logoAne.ico"))
+
         # Inicializar datos compartidos
         self.datos = DatosCompartidos()
         
@@ -243,14 +248,18 @@ class VentanaBienvenida(ctk.CTkFrame):
         
         # Configurar columnas
         frame_listas.columnconfigure(1, weight=1)
+
+        # Frame para los botones de navegación
+        frame_botones = ctk.CTkFrame(self)
+        frame_botones.pack(pady=10, padx=10, fill="x", side="bottom")
         
         # Botón para volver a selección
-        self.btn_volver = ctk.CTkButton(self, text="Volver", 
+        self.btn_volver = ctk.CTkButton(frame_botones, text="Volver", 
                                    command=lambda: self.controller.mostrar_ventana(VentanaSeleccion))
         self.btn_volver.pack(side="left", padx=10, pady=10)
         
         # Botón para avanzar
-        self.btn_siguiente = ctk.CTkButton(self, text="Siguiente", 
+        self.btn_siguiente = ctk.CTkButton(frame_botones, text="Siguiente", 
                                       command=lambda: self.avanzar())
         self.btn_siguiente.pack(side="right", padx=10, pady=10)
         self.btn_siguiente.configure(state="normal")
@@ -878,7 +887,7 @@ class VentanaBandas(ctk.CTkFrame):
         lbl_municipio.pack(padx=10, pady=5, anchor="w")
         
         # self.entry_municipio = ctk.CTkEntry(self.frame_municipio, placeholder_text="Ingrese el municipio")
-        self.df = pd.read_excel('./src/utils/Referencias.xlsx', sheet_name = 3)
+        self.df = pd.read_excel(rpath('./src/utils/Referencias.xlsx'), sheet_name = 3)
         municipalities_list = self.df['Municipio - departamento'].tolist()
 
         self.entry_municipio = AutocompleteEntry(self.frame_municipio, municipios_list=municipalities_list, placeholder_text="Ingrese el municipio")
@@ -913,9 +922,7 @@ class VentanaBandas(ctk.CTkFrame):
         self.actualizar_estado_widgets()
     
     def actualizar(self):
-        """Se llama cuando la ventana se muestra"""
-        # print(f"Tipo de medición actual: {self.controller.datos.tipo_medicion}")
-        
+        """Se llama cuando la ventana se muestra"""        
         # Mostrar u ocultar frames según el tipo de medición
         if self.controller.datos.tipo_medicion == 'banco':
             # Mostrar los frames de municipio y DANE
@@ -982,8 +989,7 @@ class VentanaBandas(ctk.CTkFrame):
                 try:
                     # Creación del objeto de conexión
                     mbk_instrument = EtlManager(ip, impedance, transductores)
-                    print(impedance)
-                    print(type(impedance))
+                    
                     # Actualización de los datos compartidos
                     self.controller.datos.mbk_instrument = mbk_instrument
                     self.controller.datos.ip_bandas = mbk_instrument.ip_address
@@ -1533,154 +1539,155 @@ class VentanaResumen(ctk.CTkFrame):
         
         # Iniciar proceso de medición en un hilo separado
         def start_measurement(self):
-            # try:
-            # Inicializar la barra de progreso
-            progress_callback(0, 1, "Preparando instrumentos...")
-            
-            # Creación del objeto controlador de las mediciones
-            measurement_manager = MeasurementManager(
-                atv = self.controller.datos.atv_instrument,
-                dtv = self.controller.datos.dtv_instrument,
-                mbk = self.controller.datos.mbk_instrument,
-                rtr = self.controller.datos.rtr_instrument
-            )
+            pythoncom.CoInitializeEx(pythoncom.COINIT_APARTMENTTHREADED)
+            try:
+                # Inicializar la barra de progreso
+                progress_callback(0, 1, "Preparando instrumentos...")
+                
+                # Creación del objeto controlador de las mediciones
+                measurement_manager = MeasurementManager(
+                    atv = self.controller.datos.atv_instrument,
+                    dtv = self.controller.datos.dtv_instrument,
+                    mbk = self.controller.datos.mbk_instrument,
+                    rtr = self.controller.datos.rtr_instrument
+                )
 
-            # Definición de la ruta de almacenamiento de soportes para tv
-            municipality = self.controller.datos.municipality
-            point = self.controller.datos.point
-            storage_path_tv = f"./results/{municipality}/P{str(point).zfill(2)}"
-
-            # Verificar si mbk no es None y crear la segunda barra de progreso si es necesario
-            mbk_parallel = False
-            if measurement_manager.mbk is not None:
                 # Definición de la ruta de almacenamiento de soportes para tv
-                date = self.controller.datos.site_dictionary['date_for_mbk_folder']
+                municipality = self.controller.datos.municipality
+                point = self.controller.datos.point
+                root_path = filedialog.askdirectory(
+                    title="Seleccione la carpeta para guardar resultados",
+                    mustexist=False
+                )
+                storage_path_tv = rpath(f"{root_path}/{municipality}/P{str(point).zfill(2)}")
 
-                # Si solo se va a medir banco, se trae el código DANE desde el usuario
-                if self.controller.datos.tipo_medicion == 'banco':
-                    dane_code = self.controller.datos.dane_code
-                    storage_path_bank = f"./results/{dane_code}_{date}_{municipality.replace(' ', '-').upper()}"
+                # Verificar si mbk no es None y crear la segunda barra de progreso si es necesario
+                mbk_parallel = False
+                if measurement_manager.mbk is not None:
+                    # Definición de la ruta de almacenamiento de soportes para tv
+                    date = self.controller.datos.site_dictionary['date_for_mbk_folder']
+
+                    # Si solo se va a medir banco, se trae el código DANE desde el usuario
+                    if self.controller.datos.tipo_medicion == 'banco':
+                        dane_code = self.controller.datos.dane_code
+                        storage_path_bank = rpath(f"{root_path}/{dane_code}_{date}_{municipality.replace(' ', '-').upper()}")
+                        
+                    # En caso contrario, se obtiene desde la preingeniería
+                    else:
+                        dane_code = self.controller.datos.object_preengeneering.get_dane_code(municipality)
+                        storage_path_bank = rpath(f"{root_path}/{dane_code}_{date}_{municipality.replace(' ', '-').upper()}_P{point}")
                     
-                # En caso contrario, se obtiene desde la preingeniería
-                else:
-                    dane_code = self.controller.datos.object_preengeneering.get_dane_code(municipality)
-                    storage_path_bank = f"./results/{dane_code}_{date}_{municipality.replace(' ', '-').upper()}_P{point}"
-                
-                if measurement_manager.dtv is not None:
-                    if (measurement_manager.mbk.ip_address != measurement_manager.dtv.ip_address):
-                        mbk_parallel = True
+                    if measurement_manager.dtv is not None:
+                        if (measurement_manager.mbk.ip_address != measurement_manager.dtv.ip_address):
+                            mbk_parallel = True
 
-                        # Crear segunda barra de progreso para medición paralela
-                        self.progreso_mbk = ctk.CTkProgressBar(self)
-                        self.progreso_mbk.set(0)
-                        self.progreso_mbk.pack(pady=5, padx=20, fill="x")
-                        self.lbl_estado_medicion_mbk = ctk.CTkLabel(self, text="Preparando medición de banco...")
-                        self.lbl_estado_medicion_mbk.pack(pady=2)
+                            # Crear segunda barra de progreso para medición paralela
+                            self.progreso_mbk = ctk.CTkProgressBar(self)
+                            self.progreso_mbk.set(0)
+                            self.progreso_mbk.pack(pady=5, padx=20, fill="x")
+                            self.lbl_estado_medicion_mbk = ctk.CTkLabel(self, text="Preparando medición de banco...")
+                            self.lbl_estado_medicion_mbk.pack(pady=2)
 
-            # Actualizar progreso
-            progress_callback(0, 1, "Realizando mediciones SFN...")
+                # Actualizar progreso
+                progress_callback(0, 1, "Realizando mediciones SFN...")
 
-            # Si mbk existe y es paralelo, iniciar medición en hilo separado
-            if mbk_parallel:
-                # Callback para actualizar la barra de progreso de mbk
-                def mbk_progress_callback(current, total, message=""):
-                    percent = current / total if total > 0 else 0
-                    def update_mbk_ui():
-                        self.progreso_mbk.set(percent)
-                        self.lbl_estado_medicion_mbk.configure(
-                            text=f"Progreso de medición de banco: {int(percent * 100)}% - {message}"
+                # Si mbk existe y es paralelo, iniciar medición en hilo separado
+                if mbk_parallel:
+                    # Callback para actualizar la barra de progreso de mbk
+                    def mbk_progress_callback(current, total, message=""):
+                        percent = current / total if total > 0 else 0
+                        def update_mbk_ui():
+                            self.progreso_mbk.set(percent)
+                            self.lbl_estado_medicion_mbk.configure(
+                                text=f"Progreso de medición de banco: {int(percent * 100)}% - {message}"
+                            )
+                            self.update()
+                        self.after(0, update_mbk_ui)
+                    
+                    # Iniciar medición de mbk en hilo separado
+                    mbk_thread = threading.Thread(
+                        target=measurement_manager.mbk_measurement,
+                        args=(storage_path_bank, mbk_progress_callback),
+                        daemon=True
+                    )
+                    mbk_thread.start()
+
+                # Hacer medición de SFN en caso de que sea necesario
+                if measurement_manager.atv is not None and measurement_manager.dtv is not None:
+
+                    if self.controller.datos.sfn_dictionary:
+                        sfn_selection = measurement_manager.sfn_measurement(
+                            dictionary = self.controller.datos.sfn_dictionary,
+                            path = storage_path_tv,
+                            park_acimuth = self.controller.datos.angulo_actual_rotor,
+                            callback_rotate = manual_rotation_callback
                         )
-                        self.update()
-                    self.after(0, update_mbk_ui)
-                
-                # Iniciar medición de mbk en hilo separado
-                mbk_thread = threading.Thread(
-                    target=measurement_manager.mbk_measurement,
-                    args=(storage_path_bank, mbk_progress_callback),
-                    daemon=True
-                )
-                mbk_thread.start()
 
-            # Hacer medición de SFN en caso de que sea necesario
-            if measurement_manager.atv is not None and measurement_manager.dtv is not None:
+                        # Actualizar el diccionario de mediciones
+                        measurement_dictionary = self.controller.datos.object_preengeneering.update_sfn(
+                            self.controller.datos.measurement_dictionary,
+                            sfn_selection
+                        )
+                    else:
+                        # Si el diccionario de SFN está vacío, el diccionario de medición es el mismo
+                        measurement_dictionary = self.controller.datos.measurement_dictionary
 
-                if self.controller.datos.sfn_dictionary:
-                    sfn_selection = measurement_manager.sfn_measurement(
-                        dictionary = self.controller.datos.sfn_dictionary,
-                        path = storage_path_tv,
+                    # Para pruebas
+                    # measurement_dictionary = {'Manjuí': {'Acimuth': 254, 'Analógico': {'Canal Capital': 2}, 'Digital': {'RTVC': 16}}}
+
+                    # Medición de TV con la barra de progreso
+                    atv_result, dtv_result = measurement_manager.tv_measurement(
+                        dictionary = measurement_dictionary,
                         park_acimuth = self.controller.datos.angulo_actual_rotor,
-                        callback_rotate = manual_rotation_callback
+                        path = storage_path_tv,
+                        callback_rotate = manual_rotation_callback,
+                        callback_confirm = confirm_measurement_callback,
+                        callback_progress = progress_callback  # Añadimos el callback de progreso
                     )
 
-                    # Actualizar el diccionario de mediciones
-                    measurement_dictionary = self.controller.datos.object_preengeneering.update_sfn(
-                        self.controller.datos.measurement_dictionary,
-                        sfn_selection
-                    )
-                else:
-                    # Si el diccionario de SFN está vacío, el diccionario de medición es el mismo
-                    measurement_dictionary = self.controller.datos.measurement_dictionary
+                    # Actualizar progreso para post-procesamiento
+                    progress_callback(0.9, 1, "Generando reportes...")
 
-                # Para pruebas
-                # measurement_dictionary = {'Manjuí': {'Acimuth': 254, 'Analógico': {'Canal Capital': 2}, 'Digital': {'RTVC': 16}}}
+                    # Llenado de postprocesamiento
+                    try:
+                        report = ExcelReport()
+                        report.fill_reports(
+                            site_dictionary = self.controller.datos.site_dictionary,
+                            analog_measurement_dictionary = atv_result,
+                            digital_measurement_dictionary = dtv_result,
+                            sfn_dictionary = self.controller.datos.sfn_dictionary
+                        )
+                    except:
+                        progress_callback(1, 1, "Error al generar reportes :(")
+                        self.after(0, show_finish_button)
 
-                # Medición de TV con la barra de progreso
-                atv_result, dtv_result = measurement_manager.tv_measurement(
-                    dictionary = measurement_dictionary,
-                    park_acimuth = self.controller.datos.angulo_actual_rotor,
-                    path = storage_path_tv,
-                    callback_rotate = manual_rotation_callback,
-                    callback_confirm = confirm_measurement_callback,
-                    callback_progress = progress_callback  # Añadimos el callback de progreso
-                )
+                # Ejecutar mbk_measurement secuencialmente si no es paralelo
+                if measurement_manager.mbk is not None and not mbk_parallel:
+                    progress_callback(0.95, 1, "Iniciando medición de banco...")
+                    measurement_manager.mbk_measurement(storage_path_bank, progress_callback)
 
-                # Actualizar progreso para post-procesamiento
-                progress_callback(0.9, 1, "Generando reportes...")
-
-                print('Site dictionary:')
-                print(self.controller.datos.site_dictionary, '\n')
-                print('Analog measurement dictionary:')
-                print(atv_result, '\n')
-                print('Digital measurement dictionary:')
-                print(dtv_result, '\n')
-                print('SFN dictionary:')
-                print(self.controller.datos.sfn_dictionary, '\n')
-
-                # Llenado de postprocesamiento
-                report = ExcelReport()
-                report.fill_reports(
-                    site_dictionary = self.controller.datos.site_dictionary,
-                    analog_measurement_dictionary = atv_result,
-                    digital_measurement_dictionary = dtv_result,
-                    sfn_dictionary = self.controller.datos.sfn_dictionary
-                )
-
-            # Ejecutar mbk_measurement secuencialmente si no es paralelo
-            if measurement_manager.mbk is not None and not mbk_parallel:
-                print("Se inicia medición de banco secuencial")
-                progress_callback(0.95, 1, "Iniciando medición de banco...")
-                measurement_manager.mbk_measurement(storage_path_bank, progress_callback)
-
-            # Completar medición
-            progress_callback(1, 1, "¡Medición completada con éxito!")
-            
-            # Mostrar botón de finalizar (en el hilo principal)
-            def show_finish_button():
-                self.controller.datos.medicion_completada = True
-                self.btn_finalizar.pack(side="right", padx=10, pady=10)
-            
-            self.after(0, show_finish_button)
-            
-            # except Exception as e:
-            #     # Manejar errores y mostrarlos al usuario
-            #     def show_error():
-            #         error_msg = f"Error durante la medición: {str(e)}"
-            #         self.lbl_estado_medicion.configure(text=error_msg)
-            #         CTkMessagebox(title="Error", message=error_msg, icon="error")
-            #         # Volver a mostrar el botón de inicio
-            #         self.btn_iniciar.pack(side="right", padx=10, pady=10)
+                # Completar medición
+                progress_callback(1, 1, "¡Medición completada con éxito!")
                 
-            #     self.after(0, show_error)
+                # Mostrar botón de finalizar (en el hilo principal)
+                def show_finish_button():
+                    self.controller.datos.medicion_completada = True
+                    self.btn_finalizar.pack(side="right", padx=10, pady=10)
+                
+                self.after(0, show_finish_button)
+                
+                # except Exception as e:
+                #     # Manejar errores y mostrarlos al usuario
+                #     def show_error():
+                #         error_msg = f"Error durante la medición: {str(e)}"
+                #         self.lbl_estado_medicion.configure(text=error_msg)
+                #         CTkMessagebox(title="Error", message=error_msg, icon="error")
+                #         # Volver a mostrar el botón de inicio
+                #         self.btn_iniciar.pack(side="right", padx=10, pady=10)
+                    
+                #     self.after(0, show_error)
+            finally:
+                pythoncom.CoUninitialize()
         
         # Iniciar hilo de medición
         threading.Thread(target=start_measurement, args=(self,), daemon=True).start()
