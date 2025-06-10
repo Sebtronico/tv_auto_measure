@@ -1517,10 +1517,10 @@ class VentanaResumen(ctk.CTkFrame):
             self.after(0, update_ui)
         
         # Define el callback para la rotación manual
-        def manual_rotation_callback(acimuth):
+        def manual_rotation_callback(station):
             msg = CTkMessagebox(
                 title="Rotación Manual", 
-                message=f"Gire el rotor hacia el acimuth {acimuth}°.\nUna vez apuntado, haga click en aceptar.",
+                message=f"Gire el rotor hacia {station}.\nUna vez apuntado, haga click en aceptar.",
                 option_1="Aceptar"
             )
             response = msg.get()

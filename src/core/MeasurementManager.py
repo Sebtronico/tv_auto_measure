@@ -165,7 +165,7 @@ class MeasurementManager:
                     
                     # Si se proporcionó una función callback, la llamamos
                     if callback_rotate:
-                        callback_rotate(target_acimuth)
+                        callback_rotate(f'{station}(acimuth {target_acimuth}°)')
 
                 # Se activa la traza
                 self.dtv.write_str(f'DISP:TRAC{trace}:MODE AVER')
