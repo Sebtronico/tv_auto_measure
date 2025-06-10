@@ -617,7 +617,7 @@ class ExcelReport:
                 self.fill_channel_sheet(site_dictionary, digital_measurement_dictionary, sfn_dictionary)
 
                 # Eliminar hoja de plantilla del formato TDT
-                self.wb_digital.Worksheets("Template").Delete()
+                self.wb_digital.Worksheets("Template").Delete(False)
 
                 break
 
