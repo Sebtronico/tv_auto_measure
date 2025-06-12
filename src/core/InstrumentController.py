@@ -52,7 +52,7 @@ class EtlManager(InstrumentManager):
     def read_overload(self, seconds: int):
         t = time.time()
         while time.time() - t < seconds:
-            overload = self.query_bool_with_opc('STAT:QUES:POW:COND?')
+            overload = self.query_int_with_opc('STAT:QUES:POW:COND?')
             if overload:
                 break
             else:
@@ -71,6 +71,7 @@ class EtlManager(InstrumentManager):
             self.write_bool('INP:PRES:STAT', self.preselector)
             self.write_str('INIT;*WAI')
 
+            time.sleep(3)
             overload = self.read_overload(10)
 
             if overload:
@@ -79,14 +80,16 @@ class EtlManager(InstrumentManager):
                 self.write_str(f'DISP:TRAC:Y {self.reference_level} dB') # Configura el range log.
                 self.write_str('INIT;*WAI')
 
+                time.sleep(3)
                 overload = self.read_overload(10)
 
                 if overload:
-                    while overload and self.attenuation < 20:
+                    while overload and self.attenuation < 15:
                         self.attenuation += 5
                         self.write_str(f'INP:ATT {self.attenuation} dB')
                         self.write_str('INIT;*WAI')
 
+                        time.sleep(3)
                         overload = self.read_overload(10)
 
 
@@ -383,13 +386,17 @@ class EtlManager(InstrumentManager):
 
         t = time.time()
         while True:
-            result = self.query_str_with_opc('CALC:DTV:RES:BFIL? EPPV')  
-            if result != '---':
-                time.sleep(1)
-                break  # Sale del bucle si la condición 1 se cumple
+            try:
+                result = self.query_str_with_opc('CALC:DTV:RES:BFIL? EPPV')  
+                if result != '---':
+                    time.sleep(1)
+                    break  # Sale del bucle si la condición 1 se cumple
 
-            if time.time() - t >= 10:  
-                break  # Sale del bucle si han pasado 10 segundos
+                if time.time() - t >= 10:  
+                    break  # Sale del bucle si han pasado 10 segundos
+            except TimeoutError:
+                time.sleep(10)
+                break
 
         ppat = self.query_with_opc('CALC:DTV:RES:L1PR? PPATtern') # Obtención de la variable patrón de pilotos.
         PPATtern = 'ND' if  ppat == '---' else ppat
