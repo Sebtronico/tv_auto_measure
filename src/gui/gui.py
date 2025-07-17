@@ -10,7 +10,7 @@ from src.core.MeasurementManager import MeasurementManager
 from src.core.ExcelReport import ExcelReport
 import pandas as pd
 import pythoncom
-from utils import rpath
+from src.utils.utils import rpath
 
 # Configuración global
 ctk.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
