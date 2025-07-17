@@ -44,6 +44,9 @@ class AutocompleteEntry(ctk.CTkEntry):
         # Variables para el manejo de eventos globales
         self.global_bindings = []
 
+        self.global_bindings = []
+        self._after_id = None 
+
     def bind_global_events(self):
         """Vincula eventos globales para detectar clics y scroll fuera del widget"""
         if self.listbox:
@@ -225,12 +228,27 @@ class AutocompleteEntry(ctk.CTkEntry):
                 self.close_listbox()
 
     def changed(self, *args):
+        # Cancelar cualquier llamada 'changed' pendiente
+        if self._after_id:
+            self.after_cancel(self._after_id)
+            self._after_id = None
+
+        # Programar la ejecución real de la lógica de autocompletado
+        # Ajusta el tiempo (en milisegundos) según sea necesario. 50-100 ms suele ser un buen punto de partida.
+        self._after_id = self.after(10, self._process_change) # Llama a un nuevo método privado
+
+    def _process_change(self): # Nuevo método para contener la lógica original de 'changed'
+        self._after_id = None # Reinicia el ID de la tarea una vez que se ejecuta
         pattern = self.var.get().lower()
         self.matches = [m for m in self.municipios_list if pattern in m.lower()]
 
         if self.matches and len(pattern) > 0:
-            if not self.listbox:
+            # Asegúrate de que el listbox exista y no intentes crearlo si ya está en proceso de ser creado
+            # Volvemos a incluir esta validación para mayor robustez
+            if not self.listbox or not self.listbox.winfo_exists():
                 self.create_listbox()
+            # Si el listbox existe pero su toplevel fue destruido, se necesitaría recrear.
+            # La verificación anterior `not self.listbox.winfo_exists()` maneja este caso.
             self.update_listbox_content()
         else:
             self.close_listbox()
@@ -408,7 +426,7 @@ class DatosCompartidos:
         # Tipo de medición seleccionada
         self.tipo_medicion = "banco"
 
-class AsistenteInstalacion(ctk.CTk):
+class MainWindow(ctk.CTk):
     def __init__(self):
         super().__init__()
         
@@ -430,14 +448,14 @@ class AsistenteInstalacion(ctk.CTk):
         self.frames = {}
         
         # Crear todas las páginas
-        for F in (VentanaSeleccion, VentanaBienvenida, VentanaAnalogica, VentanaDigital, VentanaBandas, 
-                  VentanaRotor, VentanaFormulario, VentanaResumen):
+        for F in (MeasurementModeWindow, LoadExcelWindow, ATVInstrumentWindow, TDTInstrumentWindow, BankInstrumentWindow, 
+                  RotorWindow, SiteInfoWindow, SummaryWindow):
             frame = F(self.container, self)
             self.frames[F] = frame
             frame.grid(row=0, column=0, sticky="nsew")
         
         # Mostrar la primera página
-        self.mostrar_ventana(VentanaSeleccion)
+        self.mostrar_ventana(MeasurementModeWindow)
     
     def mostrar_ventana(self, cont):
         """Trae al frente la ventana especificada"""
@@ -447,7 +465,7 @@ class AsistenteInstalacion(ctk.CTk):
         if hasattr(frame, 'actualizar'):
             frame.actualizar()
 
-class VentanaSeleccion(ctk.CTkFrame):
+class MeasurementModeWindow(ctk.CTkFrame):
     def __init__(self, parent, controller):
         ctk.CTkFrame.__init__(self, parent)
         self.controller = controller
@@ -490,19 +508,19 @@ class VentanaSeleccion(ctk.CTkFrame):
     def seleccionar_television(self):
         """Configurar para medición de televisión y avanzar a la ventana de bienvenida"""
         self.controller.datos.tipo_medicion = "television"
-        self.controller.mostrar_ventana(VentanaBienvenida)
+        self.controller.mostrar_ventana(LoadExcelWindow)
     
     def seleccionar_banco(self):
         """Configurar para medición de banco y avanzar directamente a la ventana de bandas"""
         self.controller.datos.tipo_medicion = "banco"
-        self.controller.mostrar_ventana(VentanaBandas)
+        self.controller.mostrar_ventana(BankInstrumentWindow)
     
     def seleccionar_ambos(self):
         """Configurar para ambos tipos de medición y avanzar a la ventana de bienvenida"""
         self.controller.datos.tipo_medicion = "ambos"
-        self.controller.mostrar_ventana(VentanaBienvenida)
+        self.controller.mostrar_ventana(LoadExcelWindow)
 
-class VentanaBienvenida(ctk.CTkFrame):
+class LoadExcelWindow(ctk.CTkFrame):
     def __init__(self, parent, controller):
         ctk.CTkFrame.__init__(self, parent)
         self.controller = controller
@@ -559,7 +577,7 @@ class VentanaBienvenida(ctk.CTkFrame):
         
         # Botón para volver a selección
         self.btn_volver = ctk.CTkButton(frame_botones, text="Volver", 
-                                   command=lambda: self.controller.mostrar_ventana(VentanaSeleccion))
+                                   command=lambda: self.controller.mostrar_ventana(MeasurementModeWindow))
         self.btn_volver.pack(side="left", padx=10, pady=10)
         
         # Botón para avanzar
@@ -581,7 +599,18 @@ class VentanaBienvenida(ctk.CTkFrame):
                 self.controller.datos.object_preengeneering = ReadExcel(ruta_archivo)
                 
                 # Actualizar la etiqueta
-                self.lbl_archivo.configure(text=f"Archivo cargado: {ruta_archivo.split('/')[-1]}")
+                nombre_archivo = ruta_archivo.split('/')[-1]
+                max_caracteres_nombre = 35 # Límite para el nombre del archivo
+
+                if len(nombre_archivo) > max_caracteres_nombre:
+                    # Acorta el nombre del archivo para evitar que la ventana se ensanche
+                    # Ej: "nombre_muy_largo.xlsx" -> "nombre_muy_l...go.xlsx"
+                    parte_inicial = nombre_archivo[:max_caracteres_nombre - 15]
+                    parte_final = nombre_archivo[-12:]
+                    nombre_mostrado = f"{parte_inicial}...{parte_final}"
+                else:
+                    nombre_mostrado = nombre_archivo
+                self.lbl_archivo.configure(text=f"Archivo: {nombre_mostrado}")
                 
                 # Poblar las listas desplegables con las columnas del Excel
                 municipalities = self.controller.datos.object_preengeneering.get_municipalities()
@@ -720,9 +749,9 @@ class VentanaBienvenida(ctk.CTkFrame):
         self.controller.datos.point = self.lista2.get()
         
         # Avanzar a la siguiente ventana
-        self.controller.mostrar_ventana(VentanaAnalogica)
+        self.controller.mostrar_ventana(ATVInstrumentWindow)
 
-class VentanaAnalogica(ctk.CTkFrame):
+class ATVInstrumentWindow(ctk.CTkFrame):
     def __init__(self, parent, controller):
         ctk.CTkFrame.__init__(self, parent)
         self.controller = controller
@@ -805,7 +834,7 @@ class VentanaAnalogica(ctk.CTkFrame):
         
         # Botón para volver
         btn_volver = ctk.CTkButton(frame_botones, text="Anterior", 
-                               command=lambda: controller.mostrar_ventana(VentanaBienvenida))
+                               command=lambda: controller.mostrar_ventana(LoadExcelWindow))
         btn_volver.pack(side="left", padx=10, pady=10)
         
         # Botón para avanzar
@@ -888,9 +917,9 @@ class VentanaAnalogica(ctk.CTkFrame):
     def avanzar(self):
         """Guardar datos y avanzar a la siguiente ventana"""
         # Avanzar a la siguiente ventana
-        self.controller.mostrar_ventana(VentanaDigital)
+        self.controller.mostrar_ventana(TDTInstrumentWindow)
 
-class VentanaDigital(ctk.CTkFrame):
+class TDTInstrumentWindow(ctk.CTkFrame):
     def __init__(self, parent, controller):
         ctk.CTkFrame.__init__(self, parent)
         self.controller = controller
@@ -976,7 +1005,7 @@ class VentanaDigital(ctk.CTkFrame):
         
         # Botón para volver
         btn_volver = ctk.CTkButton(frame_botones, text="Anterior", 
-                               command=lambda: controller.mostrar_ventana(VentanaAnalogica))
+                               command=lambda: controller.mostrar_ventana(ATVInstrumentWindow))
         btn_volver.pack(side="left", padx=10, pady=10)
         
         # Botón para avanzar
@@ -1070,11 +1099,11 @@ class VentanaDigital(ctk.CTkFrame):
         """Guardar datos y avanzar a la siguiente ventana"""
         # Avanzar a la siguiente ventana
         if self.controller.datos.tipo_medicion == "banco" or self.controller.datos.tipo_medicion == "ambos":
-            self.controller.mostrar_ventana(VentanaBandas)
+            self.controller.mostrar_ventana(BankInstrumentWindow)
         else:
-            self.controller.mostrar_ventana(VentanaRotor)
+            self.controller.mostrar_ventana(RotorWindow)
 
-class VentanaBandas(ctk.CTkFrame):
+class BankInstrumentWindow(ctk.CTkFrame):
     def __init__(self, parent, controller):
         ctk.CTkFrame.__init__(self, parent)
         self.controller = controller
@@ -1214,7 +1243,7 @@ class VentanaBandas(ctk.CTkFrame):
         
         # Botón para volver
         btn_volver = ctk.CTkButton(frame_botones, text="Anterior", 
-                               command=lambda: controller.mostrar_ventana(VentanaSeleccion) if self.controller.datos.tipo_medicion == "banco" else controller.mostrar_ventana(VentanaAnalogica))
+                               command=lambda: controller.mostrar_ventana(MeasurementModeWindow) if self.controller.datos.tipo_medicion == "banco" else controller.mostrar_ventana(ATVInstrumentWindow))
         btn_volver.pack(side="left", padx=10, pady=10)
         
         # Botón para avanzar
@@ -1365,11 +1394,11 @@ class VentanaBandas(ctk.CTkFrame):
             
         # Avanzar a la siguiente ventana
         if self.controller.datos.tipo_medicion == "television" or self.controller.datos.tipo_medicion == "ambos":
-            self.controller.mostrar_ventana(VentanaRotor)
+            self.controller.mostrar_ventana(RotorWindow)
         else:
-            self.controller.mostrar_ventana(VentanaResumen)
+            self.controller.mostrar_ventana(SummaryWindow)
         
-class VentanaRotor(ctk.CTkFrame):
+class RotorWindow(ctk.CTkFrame):
     def __init__(self, parent, controller):
         ctk.CTkFrame.__init__(self, parent)
         self.controller = controller
@@ -1440,7 +1469,7 @@ class VentanaRotor(ctk.CTkFrame):
         
         # Botón para volver
         btn_volver = ctk.CTkButton(frame_botones, text="Anterior", 
-                               command=lambda: controller.mostrar_ventana(VentanaBandas) if self.controller.datos.tipo_medicion != "television" else controller.mostrar_ventana(VentanaDigital))
+                               command=lambda: controller.mostrar_ventana(BankInstrumentWindow) if self.controller.datos.tipo_medicion != "television" else controller.mostrar_ventana(TDTInstrumentWindow))
         btn_volver.pack(side="left", padx=10, pady=10)
         
         # Botón para avanzar
@@ -1524,9 +1553,9 @@ class VentanaRotor(ctk.CTkFrame):
                 return
         
         # Avanzar a la siguiente ventana
-        self.controller.mostrar_ventana(VentanaFormulario)
+        self.controller.mostrar_ventana(SiteInfoWindow)
 
-class VentanaFormulario(ctk.CTkFrame):
+class SiteInfoWindow(ctk.CTkFrame):
     def __init__(self, parent, controller):
         ctk.CTkFrame.__init__(self, parent)
         self.controller = controller
@@ -1622,7 +1651,7 @@ class VentanaFormulario(ctk.CTkFrame):
         
         # Botón para volver
         btn_volver = ctk.CTkButton(frame_botones, text="Anterior", 
-                               command=lambda: controller.mostrar_ventana(VentanaRotor))
+                               command=lambda: controller.mostrar_ventana(RotorWindow))
         btn_volver.pack(side="left", padx=10, pady=10)
         
         # Botón para avanzar
@@ -1648,9 +1677,9 @@ class VentanaFormulario(ctk.CTkFrame):
         self.controller.datos.site_dictionary['address'] = self.txt_direccion.get()
         
         # Avanzar a la siguiente ventana
-        self.controller.mostrar_ventana(VentanaResumen)
+        self.controller.mostrar_ventana(SummaryWindow)
 
-class VentanaResumen(ctk.CTkFrame):
+class SummaryWindow(ctk.CTkFrame):
     def __init__(self, parent, controller):
         ctk.CTkFrame.__init__(self, parent)
         self.controller = controller
@@ -1670,7 +1699,7 @@ class VentanaResumen(ctk.CTkFrame):
         
         # Botón para volver
         btn_volver = ctk.CTkButton(frame_botones, text="Anterior", 
-                               command=lambda: controller.mostrar_ventana(VentanaFormulario) if self.controller.datos.tipo_medicion != "banco" else controller.mostrar_ventana(VentanaBandas))
+                               command=lambda: controller.mostrar_ventana(SiteInfoWindow) if self.controller.datos.tipo_medicion != "banco" else controller.mostrar_ventana(BankInstrumentWindow))
         btn_volver.pack(side="left", padx=10, pady=10)
         
         # Botón para iniciar medición
@@ -2030,11 +2059,11 @@ class VentanaResumen(ctk.CTkFrame):
         self.btn_iniciar.pack(side="right", padx=10, pady=10)
         
         # Volver a la primera ventana
-        self.controller.mostrar_ventana(VentanaBienvenida)
+        self.controller.mostrar_ventana(LoadExcelWindow)
 
 # Función para iniciar la aplicación
 def iniciar_aplicacion():
-    app = AsistenteInstalacion()
+    app = MainWindow()
     app.mainloop()
 
 if __name__ == "__main__":
