@@ -1,7 +1,7 @@
 import pandas as pd
 from collections import OrderedDict
 from src.utils.constants import *
-from utils import rpath
+from src.utils.utils import rpath
 
 class ReadExcel:
     def __init__(self, filename: str):

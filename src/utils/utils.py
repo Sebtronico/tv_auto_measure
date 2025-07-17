@@ -4,5 +4,8 @@ from pathlib import Path
 def rpath(relative_path):
     """Devuelve la ruta absoluta para archivos dentro de resources/templates, etc."""
     # Cuando PyInstaller crea el .exe, guarda los archivos en una carpeta temporal (sys._MEIPASS)
-    base_path = Path(getattr(sys, '_MEIPASS', Path(__file__).parent))
+    if getattr(sys, "frozen", False):
+        base_path = Path(sys._MEIPASS)
+    else:
+        base_path = Path(__file__).parent.parent.parent
     return base_path / relative_path

@@ -5,7 +5,7 @@ import openpyxl.cell
 from openpyxl.drawing.image import Image
 from openpyxl.styles import PatternFill
 from src.utils.constants import *
-from utils import rpath
+from src.utils.utils import rpath
 
 class TxCheckManager:
     def __init__(self):

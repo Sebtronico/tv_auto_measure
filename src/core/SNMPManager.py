@@ -8,7 +8,7 @@ import shutil
 import tempfile
 import time
 from src.utils.constants import *
-from utils import rpath
+from src.utils.utils import rpath
 
 
 class SNMPManager:
