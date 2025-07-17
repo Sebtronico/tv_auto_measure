@@ -15,7 +15,6 @@ from src.utils.utils import rpath
 # Configuración global
 ctk.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
 ctk.set_default_color_theme(rpath("./src/gui/custom_theme.json"))  # Themes: "blue" (standard), "green", "dark-blue"
-import customtkinter as ctk
 
 class AutocompleteEntry(ctk.CTkEntry):
     def __init__(self, master, municipios_list, *args, **kwargs):
@@ -24,29 +23,309 @@ class AutocompleteEntry(ctk.CTkEntry):
 
         self.municipios_list = sorted(municipios_list)
         self.var.trace_add("write", self.changed)
-
+       
         self.listbox = None
+        self.listbox_list = None
+        self.current_selection = -1
+        self.matches = []
+       
+        # Bind events para navegación por teclado
+        self.bind("<KeyPress>", self.on_key_press)
+        self.bind("<FocusOut>", self.on_focus_out)
+       
+        # Bind para detectar movimiento de ventana
+        self.bind("<Configure>", self.on_configure)
+       
+        # Variables para monitorear cambios de posición
+        self.last_x = None
+        self.last_y = None
+        self.position_check_id = None
+        
+        # Variables para el manejo de eventos globales
+        self.global_bindings = []
+
+    def bind_global_events(self):
+        """Vincula eventos globales para detectar clics y scroll fuera del widget"""
+        if self.listbox:
+            # Obtener la ventana principal
+            root = self.winfo_toplevel()
+            
+            # Bind para detectar clics en toda la ventana
+            click_id = root.bind("<Button-1>", self.on_global_click, "+")
+            
+            # Bind para detectar scroll en toda la ventana
+            scroll_id = root.bind("<MouseWheel>", self.on_global_scroll, "+")
+            
+            # Guardar los IDs para poder desvincularios después
+            self.global_bindings = [
+                (root, "<Button-1>", click_id),
+                (root, "<MouseWheel>", scroll_id)
+            ]
+
+    def unbind_global_events(self):
+        """Desvincula los eventos globales"""
+        for widget, event, binding_id in self.global_bindings:
+            try:
+                widget.unbind(event, binding_id)
+            except:
+                pass
+        self.global_bindings = []
+
+    def on_global_click(self, event):
+        """Maneja clics globales para cerrar el listbox si está fuera del área"""
+        if not self.listbox:
+            return
+            
+        # Verificar si el clic fue dentro del entry
+        if self.is_point_inside_widget(event.x_root, event.y_root, self):
+            return
+            
+        # Verificar si el clic fue dentro del listbox
+        if self.is_point_inside_widget(event.x_root, event.y_root, self.listbox):
+            return
+            
+        # Si llegamos aquí, el clic fue fuera del área, cerrar listbox
+        self.close_listbox()
+
+    def on_global_scroll(self, event):
+        """Maneja eventos de scroll globales para cerrar el listbox si está fuera del área"""
+        if not self.listbox:
+            return
+            
+        # Obtener las coordenadas del mouse
+        x_root = event.x_root
+        y_root = event.y_root
+        
+        # Verificar si el scroll fue dentro del entry
+        if self.is_point_inside_widget(x_root, y_root, self):
+            return
+            
+        # Verificar si el scroll fue dentro del listbox
+        if self.is_point_inside_widget(x_root, y_root, self.listbox):
+            return
+            
+        # Si llegamos aquí, el scroll fue fuera del área, cerrar listbox
+        self.close_listbox()
+
+    def is_point_inside_widget(self, x_root, y_root, widget):
+        """Verifica si un punto (en coordenadas root) está dentro de un widget"""
+        try:
+            if not widget or not widget.winfo_exists():
+                return False
+                
+            widget_x = widget.winfo_rootx()
+            widget_y = widget.winfo_rooty()
+            widget_width = widget.winfo_width()
+            widget_height = widget.winfo_height()
+            
+            return (widget_x <= x_root <= widget_x + widget_width and
+                    widget_y <= y_root <= widget_y + widget_height)
+        except:
+            return False
+
+    def on_key_press(self, event):
+        if not self.listbox:
+            return
+           
+        if event.keysym == "Down":
+            self.navigate_list(1)
+            return "break"
+        elif event.keysym == "Up":
+            self.navigate_list(-1)
+            return "break"
+        elif event.keysym == "Return":
+            self.select_current()
+            return "break"
+        elif event.keysym == "Escape":
+            self.close_listbox()
+            return "break"
+
+    def navigate_list(self, direction):
+        if not self.matches:
+            return
+           
+        # Actualizar selección actual
+        self.current_selection += direction
+       
+        # Ajustar límites
+        if self.current_selection < 0:
+            self.current_selection = len(self.matches) - 1
+        elif self.current_selection >= len(self.matches):
+            self.current_selection = 0
+           
+        # Actualizar selección visual en el listbox
+        self.listbox_list.selection_clear(0, "end")
+        self.listbox_list.selection_set(self.current_selection)
+        self.listbox_list.see(self.current_selection)
+
+    def select_current(self):
+        if self.listbox and self.current_selection >= 0:
+            value = self.matches[self.current_selection]
+            self.var.set(value)
+            self.close_listbox()
+
+    def on_focus_out(self, event):
+        # Pequeño delay para permitir clics en el listbox
+        self.after(100, self.check_focus)
+
+    def check_focus(self):
+        try:
+            focused = self.focus_get()
+            if focused != self.listbox_list and focused != self:
+                self.close_listbox()
+        except:
+            self.close_listbox()
+
+    def on_configure(self, event):
+        # Reposicionar el listbox cuando el entry se mueve o cambia
+        if self.listbox and event.widget == self:
+            self.after(1, self.update_listbox_position)
+
+    def start_position_monitoring(self):
+        """Inicia el monitoreo de posición para detectar cambios"""
+        if self.listbox:
+            self.check_position_change()
+
+    def check_position_change(self):
+        """Verifica si la posición del entry ha cambiado"""
+        if not self.listbox:
+            return
+           
+        try:
+            current_x = self.winfo_rootx()
+            current_y = self.winfo_rooty()
+           
+            # Si la posición cambió, actualizar el listbox
+            if self.last_x != current_x or self.last_y != current_y:
+                self.last_x = current_x
+                self.last_y = current_y
+                self.update_listbox_position()
+           
+            # Continuar monitoreando
+            self.position_check_id = self.after(10, self.check_position_change)
+        except:
+            self.close_listbox()
+
+    def update_listbox_position(self):
+        if self.listbox:
+            try:
+                # Obtener posición actual del entry
+                x = self.winfo_rootx()
+                y = self.winfo_rooty() + self.winfo_height()
+               
+                # Verificar que el entry esté visible en la pantalla
+                if self.winfo_viewable():
+                    self.listbox.geometry(f"+{x}+{y}")
+                    # Actualizar las posiciones de referencia
+                    self.last_x = x
+                    self.last_y = y - self.winfo_height()
+                else:
+                    self.close_listbox()
+            except:
+                self.close_listbox()
 
     def changed(self, *args):
         pattern = self.var.get().lower()
-        matches = [m for m in self.municipios_list if pattern in m.lower()]
+        self.matches = [m for m in self.municipios_list if pattern in m.lower()]
 
-        if matches:
+        if self.matches and len(pattern) > 0:
             if not self.listbox:
-                self.listbox = ctk.CTkToplevel(self)
-                self.listbox.overrideredirect(True)
-                self.listbox.configure(bg="#2b2b2b")  # fondo oscuro para parecerse a CustomTkinter
-                self.listbox.geometry(f"+{self.winfo_rootx()}+{self.winfo_rooty() + self.winfo_height()}")
-
-                self.listbox_list = tk.Listbox(self.listbox, height=5)
-                self.listbox_list.pack()
-                self.listbox_list.bind("<<ListboxSelect>>", self.selection)
-
-            self.listbox_list.delete(0, "end")
-            for item in matches:
-                self.listbox_list.insert("end", item)
+                self.create_listbox()
+            self.update_listbox_content()
         else:
             self.close_listbox()
+
+    def create_listbox(self):
+        self.listbox = ctk.CTkToplevel(self)
+        self.listbox.overrideredirect(True)
+        self.listbox.wm_attributes("-topmost", True)  # Mantener siempre encima
+       
+        # Obtener colores del tema personalizado
+        try:
+            appearance_mode = ctk.get_appearance_mode()
+            if appearance_mode == "Dark":
+                bg_color = "#343638"  # CTkEntry fg_color modo oscuro
+                fg_color = "#ffffff"  # CTkLabel text_color modo oscuro
+                select_bg = "#E8A046"  # Color principal del tema
+                select_fg = "#ffffff"  # CTkButton text_color modo oscuro
+                frame_color = "#2b2b2b"  # CTkToplevel fg_color modo oscuro
+            else:
+                bg_color = "#f9f9f9"  # CTkEntry fg_color modo claro
+                fg_color = "#000000"  # CTkLabel text_color modo claro
+                select_bg = "#E8A046"  # Color principal del tema
+                select_fg = "#000000"  # CTkButton text_color modo claro
+                frame_color = "#f2f2f2"  # CTkToplevel fg_color modo claro
+        except:
+            # Valores por defecto usando colores del tema
+            bg_color = "#343638"
+            fg_color = "#ffffff"
+            select_bg = "#E8A046"
+            select_fg = "#ffffff"
+            frame_color = "#2b2b2b"
+       
+        # Configurar apariencia del toplevel
+        self.listbox.configure(fg_color=frame_color)
+       
+        # Obtener el ancho exacto del entry
+        self.update_idletasks()  # Asegurar que las dimensiones estén actualizadas
+        entry_width = self.winfo_width()
+       
+        # Posicionar el listbox
+        self.update_listbox_position()
+       
+        # Crear el listbox con estilo apropiado
+        self.listbox_list = tk.Listbox(
+            self.listbox,
+            height=min(5, len(self.matches)) if self.matches else 5,
+            bg=bg_color,
+            fg=fg_color,
+            selectbackground=select_bg,
+            selectforeground=select_fg,
+            relief="flat",
+            borderwidth=0,
+            highlightthickness=0,
+            font=("Roboto", 10),  # Tamaño de fuente consistente con el tema
+            activestyle="none",  # Elimina el estilo de activación por defecto
+            width=1  # Ancho mínimo, se controlará por el contenedor
+        )
+        self.listbox_list.pack(fill="both", expand=True, padx=1, pady=1)
+        self.listbox_list.bind("<<ListboxSelect>>", self.selection)
+        self.listbox_list.bind("<Double-Button-1>", self.selection)
+       
+        # Configurar el ancho del toplevel para que coincida con el entry
+        self.listbox.resizable(False, False)
+       
+        # Iniciar monitoreo de posición
+        self.start_position_monitoring()
+        
+        # Vincular eventos globales
+        self.bind_global_events()
+       
+        # Reset selection
+        self.current_selection = -1
+
+    def update_listbox_content(self):
+        if not self.listbox_list:
+            return
+           
+        self.listbox_list.delete(0, "end")
+        for item in self.matches:
+            self.listbox_list.insert("end", item)
+           
+        # Actualizar altura del listbox
+        height = min(5, len(self.matches))
+        self.listbox_list.configure(height=height)
+       
+        # Obtener el ancho exacto del entry
+        self.update_idletasks()
+        entry_width = self.winfo_width()
+        listbox_height = height * 22 + 4  # 22 píxeles por línea aproximadamente + padding
+       
+        # Configurar el tamaño exacto del toplevel
+        self.listbox.geometry(f"{410}x{listbox_height}")
+       
+        # Actualizar posición para asegurar que esté en el lugar correcto
+        self.update_listbox_position()
 
     def selection(self, event):
         if self.listbox_list.curselection():
@@ -57,8 +336,33 @@ class AutocompleteEntry(ctk.CTkEntry):
 
     def close_listbox(self):
         if self.listbox:
+            # Cancelar monitoreo de posición
+            if self.position_check_id:
+                self.after_cancel(self.position_check_id)
+                self.position_check_id = None
+            
+            # Desvincular eventos globales
+            self.unbind_global_events()
+           
             self.listbox.destroy()
             self.listbox = None
+            self.listbox_list = None
+            self.current_selection = -1
+            self.matches = []
+            self.last_x = None
+            self.last_y = None
+
+    def destroy(self):
+        # Cancelar monitoreo de posición antes de destruir
+        if self.position_check_id:
+            self.after_cancel(self.position_check_id)
+            self.position_check_id = None
+        
+        # Desvincular eventos globales
+        self.unbind_global_events()
+        
+        self.close_listbox()
+        super().destroy()
 
 class DatosCompartidos:
     """Clase para almacenar todos los datos que se comparten entre ventanas"""
