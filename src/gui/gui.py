@@ -8,6 +8,7 @@ from src.core.InstrumentManager import InstrumentManager
 from src.core.InstrumentController import EtlManager, FPHManager, MSDManager
 from src.core.MeasurementManager import MeasurementManager
 from src.core.ExcelReport import ExcelReport
+from src.utils.constants import *
 import pandas as pd
 import pythoncom
 from src.utils.utils import rpath
@@ -17,11 +18,13 @@ ctk.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
 ctk.set_default_color_theme(rpath("./src/gui/custom_theme.json"))  # Themes: "blue" (standard), "green", "dark-blue"
 
 class AutocompleteEntry(ctk.CTkEntry):
-    def __init__(self, master, municipios_list, *args, **kwargs):
+    def __init__(self, master, options_list, listbox_width = 300, *args, **kwargs):
         self.var = ctk.StringVar()
         super().__init__(master, textvariable=self.var, *args, **kwargs)
 
-        self.municipios_list = sorted(municipios_list)
+        self.listbox_width = listbox_width
+
+        self.options_list = sorted(options_list)
         self.var.trace_add("write", self.changed)
        
         self.listbox = None
@@ -240,7 +243,7 @@ class AutocompleteEntry(ctk.CTkEntry):
     def _process_change(self): # Nuevo método para contener la lógica original de 'changed'
         self._after_id = None # Reinicia el ID de la tarea una vez que se ejecuta
         pattern = self.var.get().lower()
-        self.matches = [m for m in self.municipios_list if pattern in m.lower()]
+        self.matches = [m for m in self.options_list if pattern in m.lower()]
 
         if self.matches and len(pattern) > 0:
             # Asegúrate de que el listbox exista y no intentes crearlo si ya está en proceso de ser creado
@@ -340,7 +343,7 @@ class AutocompleteEntry(ctk.CTkEntry):
         listbox_height = height * 22 + 4  # 22 píxeles por línea aproximadamente + padding
        
         # Configurar el tamaño exacto del toplevel
-        self.listbox.geometry(f"{410}x{listbox_height}")
+        self.listbox.geometry(f"{self.listbox_width}x{listbox_height}")
        
         # Actualizar posición para asegurar que esté en el lugar correcto
         self.update_listbox_position()
@@ -381,6 +384,146 @@ class AutocompleteEntry(ctk.CTkEntry):
         
         self.close_listbox()
         super().destroy()
+
+class AddChannelWindow(ctk.CTkToplevel):
+    def __init__(self, master=None):
+        super().__init__(master)
+        self.title("Añadir canal")
+        self.geometry("400x210")
+        self.after(200, lambda:self.wm_iconbitmap(rpath("./resources/logoAne.ico")))  # Retraso para correcto cargue del logo
+        self.grab_set()        
+
+        self.datos = {}
+
+        # Se configura el ancho de la segunda columna de ingreso de datos
+        self.grid_columnconfigure(1, weight=1)
+
+        # Selección de canal
+        label_channel = ctk.CTkLabel(self, text="Numero del canal:")
+        label_channel.grid(row=0, column=0, padx=10, pady=10, sticky="w")
+
+        self.channel_entry = ctk.CTkEntry(self, placeholder_text="0")
+        self.channel_entry.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
+
+        # Selección de servicio
+        label_service = ctk.CTkLabel(self, text="Servicio:")
+        label_service.grid(row=1, column=0, padx=10, pady=10, sticky="w")
+
+        self.service_list = ctk.CTkOptionMenu(self, values=list(PLP_SERVICES.keys()))
+        self.service_list.grid(row=1, column=1, padx=10, pady=10, sticky="ew")
+
+        # Obtención de la lista de estaciones del diccionario
+        station_list = []
+        measurement_dictionary = master.datos.measurement_dictionary
+        for station in measurement_dictionary.keys():
+            if measurement_dictionary[station]['Digital']:
+                station_list.append(station)
+        
+        station_list.append('---Otra')
+
+        # Selección de la estación de procedencia
+        label_station = ctk.CTkLabel(self, text="Estación de procedencia:")
+        label_station.grid(row=2, column=0, padx=10, pady=10, sticky="w")
+        
+        self.list_station = ctk.CTkOptionMenu(self, values=station_list, command=self.station_selected)
+        self.list_station.grid(row=2, column=1, padx=10, pady=10, sticky="ew")
+
+        # Botón de cancelar
+        self.cancel_button = ctk.CTkButton(self, text="Cancelar", command=self.cancel)
+        self.cancel_button.grid(row=3, column=0, pady=20)
+
+        # Botón de guardar
+        self.save_button = ctk.CTkButton(self, text="Guardar", command=self.save)
+        self.save_button.grid(row=3, column=1, pady=20)
+
+    def station_selected(self, event):
+        selected_station = self.list_station.get()
+
+        # Se revisa la estación seleccionada
+        if selected_station == '---Otra':
+            # Se redimensiona la ventana para visualizar todos los widgets
+            self.geometry("400x300")
+
+            # Se añaden label y entry con autocompletado para elegir la estación
+            self.label_another_station = ctk.CTkLabel(self, text="Seleccione la estación:")
+            self.label_another_station.grid(row=3, column=0, padx=10, pady=10, sticky="w")
+            
+            # Cargue de lista de estaciones
+            df = pd.read_excel(rpath('./src/utils/Referencias.xlsx'), sheet_name = 2)
+            available_stations = df['TX_TDT'].tolist()
+
+            # Entry con autocompletado para seleccionar la estación
+            self.new_station_entry = AutocompleteEntry(self, options_list=available_stations, listbox_width=210, placeholder_text="Ingrese la estación")
+            self.new_station_entry.grid(row=3, column=1, padx=10, pady=10, sticky="ew")
+
+            # Selección de acimut
+            self.label_acimuth = ctk.CTkLabel(self, text="Ingrese el acimut:")
+            self.label_acimuth.grid(row=4, column=0, padx=10, pady=10, sticky="w")
+
+            self.acimut_entry = ctk.CTkEntry(self, placeholder_text="0")
+            self.acimut_entry.grid(row=4, column=1, padx=10, pady=10, sticky="ew")
+
+            # Reposicionar los botones de guardar y cancelar
+            self.cancel_button.grid(row=5, column=0, pady=20)
+            self.save_button.grid(row=5, column=1, pady=20)
+
+        # Si se selecciona una estación de las que ya están en la lista
+        else:
+            self.geometry("400x210")
+            if hasattr(self, 'new_station_entry') and hasattr(self, 'acimut_entry'):
+                self.label_another_station.destroy()
+                self.new_station_entry.destroy()
+                self.label_acimuth.destroy()
+                self.acimut_entry.destroy()
+
+            # Reposicionar los botones de guardar y cancelar
+            self.cancel_button.grid(row=3, column=0, pady=20)
+            self.save_button.grid(row=3, column=1, pady=20)
+
+    def save(self):
+        # Obtención del número de canal
+        try:
+            channel = int(self.channel_entry.get())
+            if channel in list(TV_TABLE.keys()):
+                self.datos['channel'] = channel
+            else:
+                CTkMessagebox(title="Error", message="Por favor, ingrese un canal válido. \n El canal ingresado no coincide con la lista de canales disponibles")
+                return
+        except ValueError:
+            CTkMessagebox(title="Error", message="El número de canal debe ser un número entero.")
+            return
+
+        # Obtención del servicio
+        self.datos['service'] = self.service_list.get()
+
+        # Obtención de la estación
+        if hasattr(self, 'new_station_entry'):
+            station = self.new_station_entry.get()
+            station = station.split(sep=' - ')[0].title()
+            self.datos['station'] = station
+        else:
+            self.datos['station'] = self.list_station.get()
+
+        # Obtención del acimut
+        if hasattr(self, 'acimut_entry'):
+            try:
+                acimuth = int(self.acimut_entry.get())
+                if 0 <= acimuth <= 360:
+                    self.datos['acimuth'] = acimuth
+                else:
+                    CTkMessagebox(title="Error", message="Por favor, ingrese un acimut válido. \n El acimut debe ser un número entre 0 y 360.")
+                    return
+            except ValueError:
+                CTkMessagebox(title="Error", message="El acimut debe ser un número entero.")
+                return
+        else:
+            self.datos['acimuth'] = self.master.datos.measurement_dictionary[self.datos['station']]['Acimuth']
+
+        # Cierra la ventana emergente
+        self.destroy()
+
+    def cancel(self):
+        self.destroy()
 
 class DatosCompartidos:
     """Clase para almacenar todos los datos que se comparten entre ventanas"""
@@ -436,6 +579,9 @@ class MainWindow(ctk.CTk):
 
         # Configuración del logo de la ventana
         self.iconbitmap(rpath("./resources/logoAne.ico"))
+
+        # Impedir el redimensionamiento de la pantalla
+        self.resizable(False, False)
 
         # Inicializar datos compartidos
         self.datos = DatosCompartidos()
@@ -653,33 +799,38 @@ class LoadExcelWindow(ctk.CTkFrame):
         self.punto = int(punto)
         self.controller.datos.point = self.punto
         self.controller.datos.site_dictionary['point'] = self.punto
+        
+        # Obtener diccionarios
+        diccionario_medicion = self.controller.datos.object_preengeneering.get_dictionary(self.municipality, self.punto)
+        self.controller.datos.measurement_dictionary = diccionario_medicion
+        diccionario_sfn = self.controller.datos.object_preengeneering.get_sfn(diccionario_medicion)
+        self.controller.datos.sfn_dictionary = diccionario_sfn
+
+        # Se crea todo el frame para mostrar las estaciones
+        self.actualizar_estaciones(diccionario_medicion, diccionario_sfn)
+
+    def actualizar_estaciones(self, diccionario_medicion: dict, diccionario_sfn: dict):
         # Eliminar el frame anterior si existe
         if hasattr(self, 'frame_estaciones_container'):
             self.frame_estaciones_container.destroy()
-        
-        # Obtener diccionarios
-        diccionario_medición = self.controller.datos.object_preengeneering.get_dictionary(self.municipality, self.punto)
-        self.controller.datos.measurement_dictionary = diccionario_medición
-        diccionario_sfn = self.controller.datos.object_preengeneering.get_sfn(diccionario_medición)
-        self.controller.datos.sfn_dictionary = diccionario_sfn
 
         # Crear contenedor principal con frame desplazable
         self.frame_estaciones_container = ctk.CTkFrame(self)
         self.frame_estaciones_container.pack(pady=(20,0), padx=10, fill="both", expand=True)
         
         # Crear el frame desplazable
-        frame_scroll = ctk.CTkScrollableFrame(self.frame_estaciones_container)
-        frame_scroll.pack(fill="both", expand=True, padx=5, pady=5)
+        self.frame_scroll = ctk.CTkScrollableFrame(self.frame_estaciones_container)
+        self.frame_scroll.pack(fill="both", expand=True, padx=5, pady=5)
         
         # Título de la sección
-        titulo_estaciones = ctk.CTkLabel(frame_scroll, text="Resumen de la medición",
+        titulo_estaciones = ctk.CTkLabel(self.frame_scroll, text="Resumen de la medición",
                                     font=ctk.CTkFont(size=16, weight="bold"))
         titulo_estaciones.pack(pady=(10,15), padx=10)
         
         # Iterar sobre cada estación para mostrar su información
-        for estacion, datos in diccionario_medición.items():
+        for estacion, datos in diccionario_medicion.items():
             # Frame para cada estación
-            frame_estacion = ctk.CTkFrame(frame_scroll)
+            frame_estacion = ctk.CTkFrame(self.frame_scroll)
             frame_estacion.pack(pady=5, padx=10, fill="x")
             
             # Título de la estación con acimuth
@@ -719,16 +870,16 @@ class LoadExcelWindow(ctk.CTkFrame):
         # Sección de Canales SFN
         if diccionario_sfn:  # Verificamos que el diccionario no esté vacío
             # Separador
-            separador = ctk.CTkFrame(frame_scroll, height=2)
+            separador = ctk.CTkFrame(self.frame_scroll, height=2)
             separador.pack(fill="x", padx=10, pady=(15,0))
             
             # Título de la sección SFN
-            titulo_sfn = ctk.CTkLabel(frame_scroll, text="Canales en SFN",
+            titulo_sfn = ctk.CTkLabel(self.frame_scroll, text="Canales en SFN",
                                     font=ctk.CTkFont(size=16, weight="bold"))
             titulo_sfn.pack(pady=(15,10), padx=10)
             
             # Frame para canales SFN
-            frame_sfn = ctk.CTkFrame(frame_scroll)
+            frame_sfn = ctk.CTkFrame(self.frame_scroll)
             frame_sfn.pack(pady=10, padx=10, fill="x")
             
             # Mostrar información de canales SFN
@@ -741,6 +892,29 @@ class LoadExcelWindow(ctk.CTkFrame):
                                         text=f"Canal {canal}: {estaciones_texto}",
                                         font=ctk.CTkFont(size=13))
                 lbl_canal_sfn.pack(pady=3, padx=10, anchor="w")
+
+        # Botón "Agregar canal"
+        self.btn_agregar_canal = ctk.CTkButton(self.frame_scroll, text="Agregar canal", command=self.add_channel)
+        self.btn_agregar_canal.pack(pady=10, padx=10)
+
+    def add_channel(self):
+        """Función para agregar un nuevo canal, muestra los campos de entrada"""
+        # Crear la ventana emergente 
+        ventana_add = AddChannelWindow(master=self.controller)
+        self.wait_window(ventana_add)
+
+        # Se obtiene el diccionario de la nueva estación cargada
+        new_station_dictionary = ventana_add.datos
+
+        # Se reprocesan los diccionarios
+        diccionario_medicion = self.controller.datos.measurement_dictionary
+        diccionario_medicion = self.controller.datos.object_preengeneering.add_station(diccionario_medicion, new_station_dictionary)
+        self.controller.datos.measurement_dictionary = diccionario_medicion
+
+        diccionario_sfn = self.controller.datos.object_preengeneering.get_sfn(diccionario_medicion)
+        self.controller.datos.sfn_dictionary = diccionario_sfn
+
+        self.actualizar_estaciones(diccionario_medicion, diccionario_sfn)
     
     def avanzar(self):
         """Guardar selecciones y avanzar a la siguiente ventana"""
@@ -1211,7 +1385,7 @@ class BankInstrumentWindow(ctk.CTkFrame):
         # Configurar columnas
         self.frame_conexion.columnconfigure(1, weight=1)
         
-        # Crear siempre los frames para municipio y DANE, pero no mostrarlos aún
+        # Crear siempre el frame para municipio, pero no mostrarlo aún
         # Frame para el municipio
         self.frame_municipio = ctk.CTkFrame(self.main_container)
         # No hacemos pack aún
@@ -1223,7 +1397,7 @@ class BankInstrumentWindow(ctk.CTkFrame):
         self.df = pd.read_excel(rpath('./src/utils/Referencias.xlsx'), sheet_name = 3)
         municipalities_list = self.df['Municipio - departamento'].tolist()
 
-        self.entry_municipio = AutocompleteEntry(self.frame_municipio, municipios_list=municipalities_list, placeholder_text="Ingrese el municipio")
+        self.entry_municipio = AutocompleteEntry(self.frame_municipio, options_list=municipalities_list, listbox_width=410, placeholder_text="Ingrese el municipio")
         self.entry_municipio.pack(padx=10, pady=5, fill="x")
         
         # Frame para el código DANE
