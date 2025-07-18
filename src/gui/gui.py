@@ -1949,37 +1949,49 @@ class SummaryWindow(ctk.CTkFrame):
         # Obtener datos
         datos = self.controller.datos
         
-        # Agregar sección de archivo
-        archivo_dict = {
-            # "Archivo Excel": datos.archivo_excel.split('/')[-1] if datos.archivo_excel else "No cargado",
-            "Municipio": datos.municipality,
-            "Punto": datos.point
+        # Agregar sección de municipio
+        municipality_dict = {
+            "Municipio": datos.municipality.title(),
         }
-        agregar_seccion("Archivo de Datos", archivo_dict)
+
+        if datos.tipo_medicion == 'television' or datos.tipo_medicion == 'ambos':
+            municipality_dict["Punto"] = datos.point
+
+        if datos.tipo_medicion == 'banco' or datos.tipo_medicion == 'ambos':
+            municipality_dict["DANE"] = datos.dane_code
+
+        agregar_seccion("Municipio", municipality_dict)
         
         # Agregar sección de TV Analógica
-        tv_analogica_dict = {
-            "IP": datos.ip_tv_analogica,
-            "Puerto": datos.puerto_tv_analogica,
-            "Transductores": datos.transductores_tv_analogica
-        }
-        agregar_seccion("TV Analógica", tv_analogica_dict)
+        if datos.atv_instrument is not None:
+            tv_analogica_dict = {
+                "Instrumento": datos.atv_instrument.instrument_model_name,
+                "IP": datos.atv_instrument.ip_address,
+                "Puerto": f"{datos.atv_instrument.impedance}Ω",
+                "Transductores": datos.atv_instrument.transducers,
+            }
+            agregar_seccion("TV Analógica", tv_analogica_dict)
         
         # Agregar sección de TV Digital
-        tv_digital_dict = {
-            "IP": datos.ip_tv_digital,
-            "Puerto": datos.puerto_tv_digital,
-            "Transductores": datos.transductores_tv_digital
-        }
-        agregar_seccion("TV Digital", tv_digital_dict)
+        if datos.dtv_instrument is not None:
+            tv_digital_dict = {
+                "Instrumento": datos.dtv_instrument.instrument_model_name,
+                "IP": datos.dtv_instrument.ip_address,
+                "Puerto": f"{datos.dtv_instrument.impedance}Ω",
+                "Transductores": datos.dtv_instrument.transducers,
+            }
+            agregar_seccion("TV Digital", tv_digital_dict)
         
         # Agregar sección de Bandas
-        bandas_dict = {
-            "IP": datos.ip_banco,
-            "Puerto": datos.puerto_banco,
-            "Transductores": datos.transductores_banco
-        }
-        agregar_seccion("Medidor de banco", bandas_dict)
+        if datos.mbk_instrument is not None:
+            bandas_dict = {
+                "Instrumento": datos.mbk_instrument.instrument_model_name,
+                "IP": datos.mbk_instrument.ip_address,
+                "Puerto": f"{datos.mbk_instrument.impedance}Ω",
+                "Transductores": datos.mbk_instrument.transducers,
+            }
+            agregar_seccion("Medidor de banco", bandas_dict)
+
         
         # Agregar sección de Rotor
         rotor_dict = {
