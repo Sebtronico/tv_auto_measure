@@ -103,6 +103,7 @@ class ReadExcel:
         index_municipality = self.main_channelization.index[self.main_channelization['Municipio'] == municipality].tolist()[0]
         return self.main_channelization.at[index_municipality, 'Cód.\nDANE']
 
+
     # Retorna el número de puntos que hay en un municipio
     def get_number_of_points(self, municipality: str):
         return self.main_coordinates[self.main_coordinates['Municipio'] == municipality]['Pto.'].max()
@@ -208,20 +209,47 @@ class ReadExcel:
     # Llena el diccionario con los valores de acimut
     @staticmethod
     def fill_acimuth(municipality: str, point: int, stations: list, dataframe: pd.DataFrame, columns: dict, dictionary: dict):
-        index_acimuth = dataframe.index[(dataframe['Municipio'] == municipality) & (dataframe['Pto.'] == point)].tolist()[0]
-        for station in stations:
-            for station_column, acimuth_column in columns.items():
-                try:
-                    if station in dataframe.loc[index_acimuth, station_column].title():
-                        try:
-                            dictionary[station]['Acimuth'] = int(dataframe.at[index_acimuth, acimuth_column])
-                            break
-                        except ValueError:
-                            continue
-                except AttributeError:
-                    continue
+        found_stations = dataframe.index[(dataframe['Municipio'] == municipality) & (dataframe['Pto.'] == point)].tolist()
+        
+        if found_stations:
+            index_acimuth = found_stations[0]
+            for station in stations:
+                for station_column, acimuth_column in columns.items():
+                    try:
+                        if station in dataframe.loc[index_acimuth, station_column].title():
+                            try:
+                                dictionary[station]['Acimuth'] = int(dataframe.at[index_acimuth, acimuth_column])
+                                break
+                            except ValueError:
+                                continue
+                    except AttributeError:
+                        continue
 
-        return dictionary
+            return dictionary
+        else:
+            return dictionary
+        
+
+    # Actualiza el diccionario si se añade un nuevo canal
+    def add_station(self, dictionary: dict, new_station_dictionary: dict):
+        # Se obtiene el nombre de la nueva estación de procedencia
+        if not new_station_dictionary:
+            return dictionary
+
+        new_station = new_station_dictionary['station']
+        acimuth = new_station_dictionary['acimuth']
+        channel = new_station_dictionary['channel']
+        service = new_station_dictionary['service']
+
+        if new_station not in list(dictionary.keys()):
+            dictionary.update({new_station: {'Acimuth': 0, 'Analógico': {}, 'Digital': {}}})
+            dictionary[new_station]['Acimuth'] = acimuth
+            dictionary[new_station]['Analógico'] = {}
+            dictionary[new_station]['Digital'] = {service: channel}
+        else:
+            dictionary[new_station]['Digital'].update({service: channel})
+
+        return self.sort_dictionary(dictionary)
 
     
     # Función para ordenar el diccionario por acimuth y por número de canal
@@ -371,10 +399,11 @@ if __name__ == '__main__':
     municipio = 'Subachoque'
     punto = 1
 
-    print(excel.get_dane_code(municipio))
+    # print(excel.get_dane_code(municipio))
     # print(type(excel.get_department(municipio)))
 
-    # dictionary = excel.get_dictionary(municipio, punto)
+    dictionary = excel.get_dictionary(municipio, punto)
+    print(dictionary)
 
     # sfn = excel.get_sfn(dictionary)
     # print(sfn)
