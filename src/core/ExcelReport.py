@@ -1,3 +1,4 @@
+import xlwings as wx
 import pandas as pd
 from rapidfuzz import process, fuzz
 import numpy as np
@@ -9,53 +10,33 @@ import datetime
 from src.utils.constants import *
 import os
 import shutil
-import win32com.client as win32
-import pythoncom
-import pywintypes
-import time
-from utils import rpath
+from src.utils.utils import rpath
 import geopandas as gpd
 from shapely.geometry import Point, LineString
 import rasterio
 from rasterio.plot import show
+from rasterio.windows import Window
 
 class ExcelReport:
     def __init__(self):
         self.analog_filename = rpath('./templates/FOR_Registro Monitoreo In Situ TV Analógica_V0.xlsm')
         self.digital_filename = rpath('./templates/FOR_Registro Monitoreo In Situ TDT_V0.xlsm')
 
-        # Inicializar Excel y crear objetos de aplicación
-        # pythoncom.CoInitialize()  # Inicializar COM para subprocesos
-        self.excel = win32.gencache.EnsureDispatch("Excel.Application")
-        self.excel.Visible = False  # Trabajar en segundo plano
-        self.excel.DisplayAlerts = False  # Desactivar alertas
-        self.excel.EnableEvents = False
+        # Se inicia la app
+        self.app = wx.App(visible=False)
 
         # Abrimos workbooks
-        self.wb_analog = self.excel.Workbooks.Open(os.path.abspath(self.analog_filename))
-        self.register_sheet = self.wb_analog.Worksheets("Registro")
-        self.graphical_supports_sheet = self.wb_analog.Worksheets("Soportes Gráficos")
+        self.wb_analog = self.app.books.open(self.analog_filename)
+        self.register_sheet = self.wb_analog.sheets["Registro"]
+        self.graphical_supports_sheet = self.wb_analog.sheets["Soportes Gráficos"]
 
-        self.wb_digital = self.excel.Workbooks.Open(os.path.abspath(self.digital_filename))
-        self.general_info_sheet = self.wb_digital.Worksheets("Información Gral")
-        self.channel_template_sheet = self.wb_digital.Worksheets("Template")
+        self.wb_digital = self.app.books.open(self.digital_filename)
+        self.general_info_sheet = self.wb_digital.sheets["Información Gral"]
+        self.channel_template_sheet = self.wb_digital.sheets["Template"]
 
         # Cargue de archivo de referencias
         self.filename_references = rpath('./src/utils/Referencias.xlsx')
         self.stations = pd.read_excel(self.filename_references, sheet_name=2)
-
-    def __del__(self):
-        # Cerrar y liberar recursos al destruir el objeto
-        try:
-            if hasattr(self, 'wb_analog') and self.wb_analog is not None:
-                self.wb_analog.Close(False)  # False = no guardar cambios
-            if hasattr(self, 'wb_digital') and self.wb_digital is not None:
-                self.wb_digital.Close(False)
-            if hasattr(self, 'excel') and self.excel is not None:
-                self.excel.Quit()
-            pythoncom.CoUninitialize()
-        except:
-            pass
 
     def _get_closest_station_name(self, station: str):
         stations = self.stations['TX_TDT'].tolist()
@@ -98,7 +79,8 @@ class ExcelReport:
         point_coord = (lat_point, lon_point)
 
         # Cargue del archivo DEM
-        dem_file = rpath("./resources/SRTM_30_Col1.tif")
+        # dem_file = rpath("./resources/SRTM_30_Col1.tif")
+        dem_file = rpath("./resources/dem_reducido_deflate.tif")
         with rasterio.open(dem_file) as dem:
             dem_crs = dem.crs  # Obtener CRS del DEM
 
@@ -109,7 +91,7 @@ class ExcelReport:
         point_coord_projected = transformer.transform(*point_coord[::-1])
 
         # Número de puntos a lo largo del perfil
-        number_of_points = 500
+        # number_of_points = 500
 
         for station in station_list:
             # Se obtienen las coordenadas de la estación desde el documento de referencias
@@ -123,6 +105,18 @@ class ExcelReport:
 
             # Se crea una línea entre la estación y el punto
             line = LineString([station_coord_projected, point_coord_projected])
+            
+            # Get the length of the line in meters
+            line_length_meters = line.length 
+
+            # Determine an appropriate number of points based on DEM resolution
+            # Aim for roughly 1 point per pixel, or maybe 2 points per pixel for a slightly smoother look
+            dem_resolution = 100 # Your DEM resolution is 100m
+            desired_points_per_pixel = 1.5 # Example: 1.5 points for every DEM pixel length
+
+            number_of_points = max(50, int(line_length_meters / dem_resolution * desired_points_per_pixel)) 
+            # Use max(50, ...) to ensure a minimum number of points for very short lines
+
             interpolated_points = [line.interpolate(dist, normalized=True).coords[0] for dist in np.linspace(0, 1, number_of_points)]
 
             # Lista para guardar las elevaciones y distancias
@@ -170,100 +164,149 @@ class ExcelReport:
             plt.close()
 
     def plot_distances_image(self, lat_point: float, lon_point: float, station_list: list):
-        # Coordenadas del punto de medición
+        # Coordenadas del punto de medición (asegurándose que sea lon, lat para shapely)
         point_coord = (lon_point, lat_point)
 
-        stations = []
-        for station in station_list:
+        stations_data = []
+        for station_name in station_list:
             # Se obtienen las coordenadas de la estación desde el documento de referencias
-            index = self.stations.index[self.stations['TX_TDT'] == station].tolist()[0]
+            index = self.stations.index[self.stations['TX_TDT'] == station_name].tolist()[0]
             lat_station = self.stations.at[index, 'LAT_D']
             lon_station = self.stations.at[index, 'LONG_D']
             station_coord = (lon_station, lat_station)
 
-            stations.append({'station_name': station, 'coordinates': station_coord})
+            stations_data.append({'station_name': station_name, 'coordinates': station_coord})
 
         # Crear un GeoDataFrame para las líneas
-        geometries = [LineString([point_coord, station['coordinates']]) for station in stations]
+        geometries = [LineString([point_coord, station['coordinates']]) for station in stations_data]
 
         # Creación de líneas y punto
-        colors = ['blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black', 'white']
+        colors = ['blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black', 'purple', 'orange', 'brown'] 
 
-        lines = gpd.GeoDataFrame({'color': [colors[i] for i in range(len(station_list))], 'name': station_list},
-                                geometry=geometries, crs='EPSG:4326')
-        point = gpd.GeoDataFrame({'name': ['Punto de medición']}, geometry=[Point(point_coord)], crs='EPSG:4326')
+        lines = gpd.GeoDataFrame({'color': [colors[i % len(colors)] for i in range(len(station_list))], 'name': station_list},
+                                 geometry=geometries, crs='EPSG:4326')
+        point_gdf = gpd.GeoDataFrame({'name': ['Punto de medición']}, geometry=[Point(point_coord)], crs='EPSG:4326')
 
         # Cargar el archivo raster del mapa base
-        raster_path = rpath('./resources/Colombia_Satelital.tif')  # Ruta al archivo raster descargado
+        raster_path = './resources/Colombia_Satelital_comprimida.tif' 
+        
         with rasterio.open(raster_path) as src:
             # Reproyectar las capas al CRS del raster
-            lines = lines.to_crs(src.crs)
-            point = point.to_crs(src.crs)
+            lines_proj = lines.to_crs(src.crs)
+            point_proj = point_gdf.to_crs(src.crs)
 
-            # Recortar la región de interés automáticamente
-            all_coords_proj = [point.geometry[0].coords[0]] + [lines.geometry[idx].coords[1] for idx in range(len(stations))]
-            lons, lats = zip(*all_coords_proj)
+            # Obtener todos los puntos de interés en el CRS proyectado
+            all_x_coords = [p.x for p in point_proj.geometry]
+            all_y_coords = [p.y for p in point_proj.geometry]
+            for line_geom in lines_proj.geometry:
+                all_x_coords.extend([c[0] for c in line_geom.coords])
+                all_y_coords.extend([c[1] for c in line_geom.coords])
 
-            margin = max(max(lons) - min(lons), max(lats) - min(lats)) * 0.2  # Margen para los límites en las unidades del raster
-            min_x, max_x = min(lons) - margin, max(lons) + margin
-            min_y, max_y = min(lats) - margin, max(lats) + margin
+            min_x_data, max_x_data = min(all_x_coords), max(all_x_coords)
+            min_y_data, max_y_data = min(all_y_coords), max(all_y_coords)
 
-            margin_factor = 0.2  # Factor del 20% para añadir márgenes
-            x_min, x_max = min(lons), max(lons)
-            y_min, y_max = min(lats), max(lats)
-            margin_x = (x_max - x_min) * margin_factor
-            margin_y = (y_max - y_min) * margin_factor
+            # Calcular los límites mínimos que contienen todos los datos
+            data_width = max_x_data - min_x_data
+            data_height = max_y_data - min_y_data
 
-            # Crear la ventana (bounds -> ventana en el espacio del raster)
-            window = rasterio.windows.from_bounds(min_x - margin_x, min_y - margin_y, max_x + margin_x,
-                                                max_y + margin_y, src.transform)
-            data = src.read(window=window)  # Leer todas las bandas de la región de interés
-            transform = src.window_transform(window)  # Ajustar el transform para la ventana
+            # Definir la relación de aspecto deseada
+            desired_aspect_ratio = 1.77 # 16:9
 
-            # Mostrar el mapa base recortado con colores originales
-            fig, ax = plt.subplots(figsize=(10, 10))
-            if data.shape[0] >= 3:  # Si el raster tiene al menos 3 bandas (RGB)
-                show(data[:3], transform=transform, ax=ax)  # Mostrar las 3 primeras bandas como RGB
+            # Ajustar los límites para que la región sea cuadrada (o la relación de aspecto deseada)
+            if data_width / data_height > desired_aspect_ratio:
+                # Ajustar el alto
+                target_height = data_width / desired_aspect_ratio
+                y_center = (min_y_data + max_y_data) / 2
+                min_y_final = y_center - target_height / 2
+                max_y_final = y_center + target_height / 2
+                min_x_final, max_x_final = min_x_data, max_x_data
             else:
-                show(data, transform=transform, ax=ax, cmap='gray')  # Fallback a escala de grises
+                # Ajustar el ancho
+                target_width = data_height * desired_aspect_ratio
+                x_center = (min_x_data + max_x_data) / 2
+                min_x_final = x_center - target_width / 2
+                max_x_final = x_center + target_width / 2
+                min_y_final, max_y_final = min_y_data, max_y_data
+            
+            # Añadir un margen (ej. 20% extra) a los límites finales
+            margin_factor = 0.2 
+            total_width = max_x_final - min_x_final
+            total_height = max_y_final - min_y_final
+
+            margin_x = total_width * margin_factor
+            margin_y = total_height * margin_factor
+            
+            final_bounds = (min_x_final - margin_x, min_y_final - margin_y, 
+                            max_x_final + margin_x, max_y_final + margin_y)
+
+            # Recortar el raster usando los límites finales y la función window.from_bounds
+            window = src.window(*final_bounds)
+            window = window.intersection(Window(col_off=0, row_off=0, width=src.width, height=src.height))
+            
+            # Si la ventana resulta ser inválida (ej. no hay intersección)
+            if window.width <= 0 or window.height <= 0:
+                print("La región de interés está fuera de los límites del raster.")
+                return # Salir de la función o manejar el error
+
+            # Leer solo la parte del raster dentro de la ventana
+            data = src.read(window=window)
+            transform = src.window_transform(window) # Obtener la nueva transformación para la ventana
+                        
+            # Si src.nodata existe y se desea usarlo para rellenar fuera del área del raster:
+            if src.nodata is not None:
+                # En algunas visualizaciones, la lectura de una ventana puede producir píxeles
+                # "transparentes" o "NoData" fuera de los límites reales del raster.
+                # Aquí, nos aseguramos de que el `show` de rasterio los maneje correctamente.
+                pass # rasterio.plot.show generalmente hace esto bien con nodata
+            
+            # Mostrar el mapa base recortado
+            fig, ax = plt.subplots(figsize=(10, 10)) # Aseguramos que la figura sea cuadrada
+            
+            # Manejar el número de bandas para la visualización
+            if data.shape[0] >= 3:
+                # Transponer para obtener (alto, ancho, bandas) para matplotlib si no es así
+                if data.shape[0] > 3: # Si tiene más de 3 bandas, toma las 3 primeras
+                    display_data = data[:3]
+                else:
+                    display_data = data
+                
+                show(display_data, transform=transform, ax=ax)
+            else:
+                # Si es una imagen en escala de grises (1 banda) o menos de 3 bandas
+                show(data, transform=transform, ax=ax, cmap='gray')
 
             # Dibujar líneas y puntos sobre el mapa base
-            lines.plot(ax=ax, color=lines['color'], linewidth=3)
+            lines_proj.plot(ax=ax, color=lines_proj['color'], linewidth=3, zorder=2) # zorder para asegurar que estén encima
 
-            # Agregar marcadores al final de las líneas
-            for idx, station in enumerate(stations):
-                coord_x, coord_y = lines.geometry[idx].coords[1]  # Coordenadas finales
+            # Agregar marcadores al final de las líneas (estaciones)
+            for idx, station_data_item in enumerate(stations_data):
+                coord_x, coord_y = lines_proj.geometry[idx].coords[1] # Coordenadas finales de la línea
                 ax.plot(
                     coord_x,
                     coord_y,
-                    marker='*',  # Marcador circular
-                    color=lines['color'][idx],
+                    marker='*',
+                    color=lines_proj['color'][idx],
                     markersize=15,
-                    label=station['station_name'],
+                    label=station_data_item['station_name'], # Usar station_name del diccionario
+                    zorder=3 # Asegurar que los marcadores estén encima
                 )
 
             # Dibujar el punto de medición
-            coord_x_1, coord_y_1 = point.geometry[0].coords[0]
+            coord_x_1, coord_y_1 = point_proj.geometry[0].coords[0]
 
             ax.plot(
                 coord_x_1,
                 coord_y_1,
-                marker='.',  # Marcador circular
+                marker='o', # Usar 'o' para punto, ' . ' es muy pequeño
                 color='white',
-                markersize=15,
+                markeredgecolor='black', # Borde negro para visibilidad en fondo blanco
+                markersize=10,
                 label='Punto de medición',
+                zorder=3
             )
 
-            # Ajustar límites dinámicamente
-            margin_factor = 0.2  # Factor del 10% para añadir márgenes
-            x_min, x_max = min(lons), max(lons)
-            y_min, y_max = min(lats), max(lats)
-            margin_x = (x_max - x_min) * margin_factor
-            margin_y = (y_max - y_min) * margin_factor
-            ax.set_xlim(x_min - margin_x, x_max + margin_x)
-            ax.set_ylim(y_min - margin_y, y_max + margin_y)
             ax.legend(loc='upper right', fontsize=10, title_fontsize=12)
-            ax.axis('off')
+            ax.axis('off') # Quitar ejes para una imagen limpia
 
             # Guardar el mapa como archivo de imagen
             plt.savefig(rpath('./temp/distances.png'), dpi=300, bbox_inches='tight', pad_inches=0)
@@ -271,39 +314,39 @@ class ExcelReport:
 
     def fill_register_sheet(self, site_dictionary: dict, analog_measurement_dictionary: dict):
         # Información general
-        self.register_sheet.Range("E3").Value = site_dictionary['municipality']
-        self.register_sheet.Range("E4").Value = site_dictionary['department']
-        self.register_sheet.Range("E5").Value = site_dictionary['address']
-        self.register_sheet.Range("E6").Value = site_dictionary['latitude_dms']
-        self.register_sheet.Range("E7").Value = site_dictionary['longitude_dms']
-        self.register_sheet.Range("E8").Value = site_dictionary['altitude']
-        self.register_sheet.Range("E9").Value = site_dictionary['point']
-        self.register_sheet.Range("E10").Value = site_dictionary['around']
-        self.register_sheet.Range("E11").Value = site_dictionary['terrain']
-        self.register_sheet.Range("E12").Value = site_dictionary['signal_path']
-        self.register_sheet.Range("E13").Value = site_dictionary['signal_obstruction']
+        self.register_sheet.range("E3").value = site_dictionary['municipality']
+        self.register_sheet.range("E4").value = site_dictionary['department']
+        self.register_sheet.range("E5").value = site_dictionary['address']
+        self.register_sheet.range("E6").value = site_dictionary['latitude_dms']
+        self.register_sheet.range("E7").value = site_dictionary['longitude_dms']
+        self.register_sheet.range("E8").value = site_dictionary['altitude']
+        self.register_sheet.range("E9").value = site_dictionary['point']
+        self.register_sheet.range("E10").value = site_dictionary['around']
+        self.register_sheet.range("E11").value = site_dictionary['terrain']
+        self.register_sheet.range("E12").value = site_dictionary['signal_path']
+        self.register_sheet.range("E13").value = site_dictionary['signal_obstruction']
 
         # Servidores públicos responsables de las mediciones
         now = datetime.datetime.now()  # Obetención de fecha y hora de la medida
         date = f'{str(now.day).zfill(2)}/{str(now.month).zfill(2)}/{str(now.year)}'
-        self.register_sheet.Range("L3").Value = date
-        self.register_sheet.Range("H6").Value = site_dictionary['engineer_1']
-        self.register_sheet.Range("H10").Value = site_dictionary['engineer_2']
+        self.register_sheet.range("L3").value = date
+        self.register_sheet.range("H6").value = site_dictionary['engineer_1']
+        self.register_sheet.range("H10").value = site_dictionary['engineer_2']
 
         # Equipo utilizado para la realización del monitoreo in situ
-        self.register_sheet.Range("R4").Value = site_dictionary['instrument_type']
-        self.register_sheet.Range("T4").Value = site_dictionary['instrument_brand']
-        self.register_sheet.Range("U4").Value = site_dictionary['instrument_model']
-        self.register_sheet.Range("U4").Value = site_dictionary['instrument_serial']
+        self.register_sheet.range("R4").value = site_dictionary['instrument_type']
+        self.register_sheet.range("T4").value = site_dictionary['instrument_brand']
+        self.register_sheet.range("U4").value = site_dictionary['instrument_model']
+        self.register_sheet.range("U4").value = site_dictionary['instrument_serial']
 
-        self.register_sheet.Range("R5").Value = 'Antena'
-        self.register_sheet.Range("T5").Value = site_dictionary['a_antenna_brand']
-        self.register_sheet.Range("U5").Value = site_dictionary['a_antenna_model']
+        self.register_sheet.range("R5").value = 'Antena'
+        self.register_sheet.range("T5").value = site_dictionary['a_antenna_brand']
+        self.register_sheet.range("U5").value = site_dictionary['a_antenna_model']
 
         # Mediciones de niveles de servicio e interferencias para televisión analógica
         for row, (channel, dic) in enumerate(analog_measurement_dictionary.items(), start=21):
-            self.register_sheet.Range(f"C{row}").Value = dic['hour']
-            self.register_sheet.Range(f"D{row}").Value = channel
+            self.register_sheet.range(f"C{row}").value = dic['hour']
+            self.register_sheet.range(f"D{row}").value = channel
 
             service_name = dic['service_name']
             if service_name == 'Caracol':
@@ -317,15 +360,15 @@ class ExcelReport:
             else:
                 fix_service_name = service_name
 
-            self.register_sheet.Range(f"E{row}").Value = fix_service_name
-            self.register_sheet.Range(f"F{row}").Value = dic['station']
-            self.register_sheet.Range(f"J{row}").Value = dic['power_video']
-            self.register_sheet.Range(f"K{row}").Value = dic['power_audio']
-            self.register_sheet.Range(f"L{row}").Value = dic['frequency_video']
-            self.register_sheet.Range(f"M{row}").Value = dic['frequency_audio']
+            self.register_sheet.range(f"E{row}").value = fix_service_name
+            self.register_sheet.range(f"F{row}").value = dic['station']
+            self.register_sheet.range(f"J{row}").value = dic['power_video']
+            self.register_sheet.range(f"K{row}").value = dic['power_audio']
+            self.register_sheet.range(f"L{row}").value = dic['frequency_video']
+            self.register_sheet.range(f"M{row}").value = dic['frequency_audio']
 
     def fill_graphical_support_sheet(self, site_dictionary: dict, analog_measurement_dictionary: dict):
-        rows_for_images = [3, 22, 41, 63, 82, 101, 122, 141, 160, 181, 200, 219, 241, 260, 270, 300, 319, 338, 359, 378, 397]
+        rows_for_images = [3, 22, 41, 63, 82, 101, 123, 142, 161, 183, 202, 221, 243, 262, 281, 303, 322, 341, 363, 382, 401]
 
         for index, (channel, dic) in enumerate(analog_measurement_dictionary.items()):
             if index < len(rows_for_images):  # Asegurarse de tener filas disponibles para las imágenes
@@ -335,151 +378,93 @@ class ExcelReport:
                 service_name = dic['service_name']
                 img_path = rpath(f'./results/{municipality}/P{point}/Soportes punto de medición/{station}/CH_{channel}_A_{service_name}/CH_{channel}.png')
 
-                # Verifica que la imagen existe
+                # Verificar que la imagen existe
                 if os.path.exists(img_path):
                     # Calcular posición (celda A + fila)
-                    left = self.graphical_supports_sheet.Range(f"A{rows_for_images[index]}").Left
-                    top = self.graphical_supports_sheet.Range(f"A{rows_for_images[index]}").Top
+                    left = self.graphical_supports_sheet.range(f"A{rows_for_images[index]}").left
+                    top = self.graphical_supports_sheet.range(f"A{rows_for_images[index]}").top
 
                     # Insertar imagen usando win32com
-                    img = self.graphical_supports_sheet.Shapes.AddPicture(
-                        os.path.abspath(img_path),  # Ruta absoluta a la imagen
-                        LinkToFile=False,           # No vincular al archivo
-                        SaveWithDocument=True,      # Guardar con el documento
-                        Left=left,                  # Posición izquierda
-                        Top=top,                    # Posición superior
-                        Width=-1,                   # -1 para mantener proporción
-                        Height=-1                   # -1 para mantener proporción
+                    img = self.graphical_supports_sheet.pictures.add(
+                        image=img_path,             # Ruta absoluta a la imagen
+                        left=left,                  # Posición izquierda
+                        top=top,                    # Posición superior
+                        scale=0.255
                     )
-
-                    # Ajustar tamaño (25% del original)
-                    img.ScaleWidth(0.25, True)
-                    img.ScaleHeight(0.25, True)
 
     def fill_general_info_sheet(self, site_dictionary: dict, digital_measurement_dictionary: dict):
         # Características del punto de medición
-        self.general_info_sheet.Range("A8").Value = site_dictionary['point']
-        self.general_info_sheet.Range("C8").Value = site_dictionary['municipality']
-        self.general_info_sheet.Range("M8").Value = site_dictionary['department']
-        self.general_info_sheet.Range("V8").Value = site_dictionary['latitude_dms']
-        self.general_info_sheet.Range("AB8").Value = site_dictionary['longitude_dms']
-        self.general_info_sheet.Range("AH8").Value = site_dictionary['altitude']
-        self.general_info_sheet.Range("A11").Value = site_dictionary['around']
-        self.general_info_sheet.Range("H11").Value = site_dictionary['terrain']
-        self.general_info_sheet.Range("M11").Value = site_dictionary['signal_path']
-        self.general_info_sheet.Range("S11").Value = site_dictionary['signal_obstruction']
-        self.general_info_sheet.Range("Z11").Value = site_dictionary['address']
+        self.general_info_sheet.range("A8").value = site_dictionary['point']
+        self.general_info_sheet.range("C8").value = site_dictionary['municipality']
+        self.general_info_sheet.range("M8").value = site_dictionary['department']
+        self.general_info_sheet.range("V8").value = site_dictionary['latitude_dms']
+        self.general_info_sheet.range("AB8").value = site_dictionary['longitude_dms']
+        self.general_info_sheet.range("AH8").value = site_dictionary['altitude']
+        self.general_info_sheet.range("A11").value = site_dictionary['around']
+        self.general_info_sheet.range("H11").value = site_dictionary['terrain']
+        self.general_info_sheet.range("M11").value = site_dictionary['signal_path']
+        self.general_info_sheet.range("S11").value = site_dictionary['signal_obstruction']
+        self.general_info_sheet.range("Z11").value = site_dictionary['address']
 
         # Equipo utilizado para la medición
-        self.general_info_sheet.Range("A15").Value = site_dictionary['instrument_type']
-        self.general_info_sheet.Range("I15").Value = site_dictionary['instrument_brand']
-        self.general_info_sheet.Range("Q15").Value = site_dictionary['instrument_model']
-        self.general_info_sheet.Range("W15").Value = site_dictionary['instrument_serial']
+        self.general_info_sheet.range("A15").value = site_dictionary['instrument_type']
+        self.general_info_sheet.range("I15").value = site_dictionary['instrument_brand']
+        self.general_info_sheet.range("Q15").value = site_dictionary['instrument_model']
+        self.general_info_sheet.range("W15").value = site_dictionary['instrument_serial']
 
-        self.general_info_sheet.Range("A16").Value = 'Antena'
-        self.general_info_sheet.Range("I16").Value = site_dictionary['d_antenna_brand']
-        self.general_info_sheet.Range("Q16").Value = site_dictionary['d_antenna_model']
+        self.general_info_sheet.range("A16").value = 'Antena'
+        self.general_info_sheet.range("I16").value = site_dictionary['d_antenna_brand']
+        self.general_info_sheet.range("Q16").value = site_dictionary['d_antenna_model']
 
         # Características de las estaciones que se reciben en el punto donde se realiza la medición
         station_list = self.get_station_list(digital_measurement_dictionary)
         for row, station in enumerate(station_list, start=20):
-            self.general_info_sheet.Range(f"A{row}").Value = station
+            self.general_info_sheet.range(f"A{row}").value = station
 
         # Características de la medición
         now = datetime.datetime.now()  # Obetención de fecha y hora de la medida
         date = f'{str(now.day).zfill(2)}/{str(now.month).zfill(2)}/{str(now.year)}'
-        self.general_info_sheet.Range("AE31").Value = date
+        self.general_info_sheet.range("AE31").value = date
 
         # Perfiles de terreno desde el punto donde se realiza la medición a las estaciones monitoreadas
-        rows_for_images = [72, 76, 80, 84, 88, 92, 97, 101]
+        rows_for_images = [73, 77, 81, 85, 89, 93, 98, 102]
         for index, station in enumerate(station_list):
             if index < len(rows_for_images):
                 img_path = rpath(f'./temp/elevation_profile-{station}.png')
                 
                 if os.path.exists(img_path):
                     # Calcular posición
-                    left = self.general_info_sheet.Range(f"A{rows_for_images[index]}").Left
-                    top = self.general_info_sheet.Range(f"A{rows_for_images[index]}").Top
+                    left = self.general_info_sheet.range(f"A{rows_for_images[index]}").left
+                    top = self.general_info_sheet.range(f"A{rows_for_images[index]}").top
                     
                     # Insertar imagen
-                    img = self.general_info_sheet.Shapes.AddPicture(
-                        os.path.abspath(img_path),
-                        LinkToFile=False,
-                        SaveWithDocument=True,
-                        Left=left,
-                        Top=top,
-                        Width=-1,
-                        Height=-1
+                    img = self.general_info_sheet.pictures.add(
+                        image=img_path,
+                        left=left,
+                        top=top,
+                        scale=0.96
                     )
 
         # Distancias desde el punto de medición a las estaciones monitoreadas
         distance_img_path = rpath('./temp/distances.png')
         if os.path.exists(distance_img_path):
             # Calcular posición para la imagen de distancias
-            left = self.general_info_sheet.Range("A105").Left
-            top = self.general_info_sheet.Range("A105").Top
+            left = self.general_info_sheet.range("A106").left
+            top = self.general_info_sheet.range("A106").top
             
             # Insertar imagen
-            distance_img = self.general_info_sheet.Shapes.AddPicture(
-                os.path.abspath(distance_img_path),
-                LinkToFile=False,
-                SaveWithDocument=True,
-                Left=left,
-                Top=top,
-                Width=-1,
-                Height=-1
+            distance_img = self.general_info_sheet.pictures.add(
+                image=distance_img_path,
+                left=left,
+                top=top,
+                scale=1.39
             )
-            
-            # Ajustar tamaño manteniendo la relación de aspecto
-            # La función _resize_image original calculaba el factor de escala basado en dimensiones máximas
-            # Aquí podríamos definir un ancho máximo fijo (por ejemplo, 35cm convertido a puntos)
-            max_width_points = 34.65 * 28.35  # Aproximadamente 35 cm a puntos (1cm ≈ 28.35 puntos)
-            
-            # Ajustar tamaño según el ancho máximo
-            if distance_img.Width > max_width_points:
-                scale_factor = max_width_points / distance_img.Width
-                distance_img.ScaleWidth(scale_factor, True)  # True para escalar proporcionalmente
 
     def copy_template_sheet(self, new_sheet_name):
-        """
-        Crea una copia de la hoja Template con un nuevo nombre y mantiene su formato,
-        área de impresión y encabezados.
+        copied_sheet = self.channel_template_sheet.copy(before=self.wb_digital.sheets['SEGUIMIENTO_ANE'])
+        copied_sheet.name = new_sheet_name
         
-        Args:
-            new_sheet_name (str): Nombre para la nueva hoja
-            
-        Returns:
-            object: Referencia a la nueva hoja creada
-        """
-        try:
-            # Verificar si ya existe una hoja con ese nombre
-            sheet_exists = False
-            for sheet in self.wb_digital.Sheets:
-                if sheet.Name == new_sheet_name:
-                    sheet_exists = True
-                    break
-            
-            if sheet_exists:
-                # Si la hoja ya existe, puedes decidir devolver esa hoja o generar un error
-                return self.wb_digital.Sheets(new_sheet_name)
-            
-            # Hacer una copia de la hoja Template
-            self.channel_template_sheet.Copy(Before=None, After=self.wb_digital.Sheets(self.wb_digital.Sheets.Count))
-            
-            # La hoja activa ahora es la copia recién creada
-            new_sheet = self.wb_digital.ActiveSheet
-            
-            # Cambiar el nombre de la nueva hoja
-            new_sheet.Name = new_sheet_name
-            
-            # La copia ya mantiene el área de impresión, formatos y encabezados
-            # porque se copió completamente desde la original
-            
-            return new_sheet
-        
-        except Exception as e:
-            print(f"Error al copiar la hoja template: {str(e)}")
-            return None
+        return copied_sheet
     
     def fill_channel_sheet(self, site_dictionary: dict, digital_measurement_dictionary: dict, sfn_dictionary: dict):
         # Se crea una hoja y se llena para cada canal digital medido
@@ -490,12 +475,11 @@ class ExcelReport:
             # Características de la medición
             station_name = f"{dic['station'].upper()} - CCNP" if dic['service_name'] in ['Caracol', 'RCN'] else f"{dic['station'].upper()} - RTVC"
             station = self._get_closest_station_name(station_name)
-            channel_sheet.Range("A8").Value = station
-            channel_sheet.Range("I8").Value = dic['service_name'].upper()
-            channel_sheet.Range("Q8").Value = TV_TABLE[channel]
-            channel_sheet.Range("W8").Value = dic['channel_type']
-            # channel_sheet.Range("AC8").Value = dic['date']
-            channel_sheet.Range("AF8").Value = dic['hour']
+            channel_sheet.range("A8").value = station
+            channel_sheet.range("I8").value = dic['service_name'].upper()
+            channel_sheet.range("Q8").value = TV_TABLE[channel]
+            channel_sheet.range("W8").value = dic['channel_type']
+            channel_sheet.range("AF8").value = dic['hour']
 
             # Características de las estaciones en red SFN que se reciben en el punto donde se realiza la medición
             try:
@@ -505,7 +489,7 @@ class ExcelReport:
                 for row, sfn_station in enumerate(sfn_stations_list, start=12):
                     renamed_sfn_station = f'{sfn_station.upper()} - CCNP' if dic['service_name'] in ['Caracol', 'RCN'] else f'{sfn_station.upper()} - RTVC'
                     renamed_sfn_station = self._get_closest_station_name(renamed_sfn_station)
-                    channel_sheet.Range(f"A{row}").Value = renamed_sfn_station
+                    channel_sheet.range(f"A{row}").value = renamed_sfn_station
             except KeyError:
                 pass
 
@@ -515,14 +499,14 @@ class ExcelReport:
             for row, plp in enumerate(plps, start=19):
                 key_plp = f'PLP_{plp}'
                 if row == 19:
-                    channel_sheet.Range(f"L{row}").Value = dic['channel_power']
-                channel_sheet.Range(f"P{row}").Value = dic[key_plp]['MRPLp']
-                channel_sheet.Range(f"R{row}").Value = dic[key_plp]['BERLdpc']
-                channel_sheet.Range(f"V{row}").Value = dic[key_plp]['cons']
-                channel_sheet.Range(f"Y{row}").Value = dic[key_plp]['PLPCodeRate']
-                channel_sheet.Range(f"AA{row}").Value = dic[key_plp]['FFTMode']
-                channel_sheet.Range(f"AD{row}").Value = dic[key_plp]['GINTerval']
-                channel_sheet.Range(f"AG{row}").Value = dic[key_plp]['PPATtern']
+                    channel_sheet.range(f"L{row}").value = dic['channel_power']
+                channel_sheet.range(f"P{row}").value = dic[key_plp]['MRPLp']
+                channel_sheet.range(f"R{row}").value = dic[key_plp]['BERLdpc']
+                channel_sheet.range(f"V{row}").value = dic[key_plp]['cons']
+                channel_sheet.range(f"Y{row}").value = dic[key_plp]['PLPCodeRate']
+                channel_sheet.range(f"AA{row}").value = dic[key_plp]['FFTMode']
+                channel_sheet.range(f"AD{row}").value = dic[key_plp]['GINTerval']
+                channel_sheet.range(f"AG{row}").value = dic[key_plp]['PPATtern']
                 
                 try:
                     # Arreglo completo de Transport Stream
@@ -534,13 +518,13 @@ class ExcelReport:
             # Análisis de Transport Stream
             if ts_array:
                 for row, ts_service_result in enumerate(ts_array, start=24):
-                    channel_sheet.Range(f"M{row}").Value = ts_service_result[1]
-                    channel_sheet.Range(f"O{row}").Value = ts_service_result[2]
-                    channel_sheet.Range(f"Q{row}").Value = ts_service_result[3]
-                    channel_sheet.Range(f"T{row}").Value = ts_service_result[4]
-                    channel_sheet.Range(f"X{row}").Value = ts_service_result[5]
-                    channel_sheet.Range(f"AA{row}").Value = ts_service_result[6]
-                    channel_sheet.Range(f"AD{row}").Value = 'No Falla'
+                    channel_sheet.range(f"M{row}").value = ts_service_result[1]
+                    channel_sheet.range(f"O{row}").value = ts_service_result[2]
+                    channel_sheet.range(f"Q{row}").value = ts_service_result[3]
+                    channel_sheet.range(f"T{row}").value = ts_service_result[4]
+                    channel_sheet.range(f"X{row}").value = ts_service_result[5]
+                    channel_sheet.range(f"AA{row}").value = ts_service_result[6]
+                    channel_sheet.range(f"AD{row}").value = 'No Falla'
 
             # Soportes de medición
             municipality = site_dictionary['municipality']
@@ -573,27 +557,34 @@ class ExcelReport:
             for img_name, img_path in img_paths.items():
                 # Verificar que la imagen existe
                 if os.path.exists(os.path.abspath(img_path)):
-                    cell = channel_sheet.Range(img_cells[img_name])
-                    # Convertir coordenadas de celda a puntos
-                    left = cell.Left
-                    top = cell.Top
+                    left = channel_sheet.range(img_cells[img_name]).left
+                    top = channel_sheet.range(img_cells[img_name]).top
                     
                     # Insertar imagen y ajustar tamaño
-                    img = channel_sheet.Shapes.AddPicture(
-                        os.path.abspath(img_path),
-                        LinkToFile=False,
-                        SaveWithDocument=True,
-                        Left=left,
-                        Top=top,
-                        Width=-1,  # Ancho proporcional
-                        Height=-1  # Alto proporcional
+                    img = channel_sheet.pictures.add(
+                        image=img_path,
+                        left=left,
+                        top=top,
+                        scale=0.32
                     )
-                    
-                    # Ajustar tamaño a 1/3 del original
-                    img.ScaleWidth(0.32, True)  # Aproximadamente 1/3.1
-                    img.ScaleHeight(0.32, True)  # Aproximadamente 1/3.1
+
+    @staticmethod
+    def sort_dictionary(dictionary: dict):
+        # Se obtiene la lista ordenada de las claves (canales) en el diccionario
+        list_of_channels = list(dictionary.keys())
+        list_of_channels.sort()
+        sorted_dictionary = {}
+        
+        for channel in list_of_channels:
+            sorted_dictionary[channel] = dictionary[channel]
+        
+        return sorted_dictionary
 
     def fill_reports(self, site_dictionary: dict, analog_measurement_dictionary: dict, digital_measurement_dictionary: dict, sfn_dictionary):
+        # Se ordenan los diccionarios de entrada por canal
+        analog_measurement_dictionary = self.sort_dictionary(analog_measurement_dictionary)
+        digital_measurement_dictionary = self.sort_dictionary(digital_measurement_dictionary)
+
         # Coordenadas del punto, para las funciones de graficado
         lat_point = site_dictionary['latitude_dec']
         lon_point = site_dictionary['longitude_dec']
@@ -606,25 +597,16 @@ class ExcelReport:
         self.plot_elevation_profile(lat_point, lon_point, digital_station_list)
         self.plot_distances_image(lat_point, lon_point, digital_station_list)
 
-        for _ in range(5):
-            try:
-                # Llenado de postprocesamiento anaógico
-                self.fill_register_sheet(site_dictionary, analog_measurement_dictionary)
-                self.fill_graphical_support_sheet(site_dictionary, analog_measurement_dictionary)
+        # Llenado de postprocesamiento anaógico
+        self.fill_register_sheet(site_dictionary, analog_measurement_dictionary)
+        self.fill_graphical_support_sheet(site_dictionary, analog_measurement_dictionary)
 
-                # Llenado del postprocesamiento tdt.
-                self.fill_general_info_sheet(site_dictionary, digital_measurement_dictionary)
-                self.fill_channel_sheet(site_dictionary, digital_measurement_dictionary, sfn_dictionary)
+        # Llenado del postprocesamiento tdt.
+        self.fill_general_info_sheet(site_dictionary, digital_measurement_dictionary)
+        self.fill_channel_sheet(site_dictionary, digital_measurement_dictionary, sfn_dictionary)
 
-                # Eliminar hoja de plantilla del formato TDT
-                self.wb_digital.Worksheets("Template").Delete(False)
-
-                break
-
-            except pywintypes.com_error:
-                pythoncom.PumpWaitingMessages()
-                time.sleep(0.5)
-            
+        # Eliminar hoja de plantilla del formato TDT
+        self.wb_digital.sheets["Template"].delete()
 
         # Guardado de archivos.
         municipality = site_dictionary['municipality']
@@ -634,17 +616,23 @@ class ExcelReport:
         analog_save_path = os.path.abspath(rpath(f'./results/{municipality}/P{point}/FOR_Registro Monitoreo In Situ TV Analógica_V0_P{point}.xlsm'))
         digital_save_path = os.path.abspath(rpath(f'./results/{municipality}/P{point}/FOR_Registro Monitoreo In Situ TDT_V0_P{point}.xlsm'))
         
+        if os.path.exists(os.path.abspath(analog_save_path)):
+            os.remove(analog_save_path)
+
+        if os.path.exists(os.path.abspath(analog_save_path)):
+            os.remove(digital_save_path)
+
         # Guardar los workbooks
-        self.wb_analog.SaveAs(analog_save_path)
-        self.wb_digital.SaveAs(digital_save_path)
+        self.wb_analog.save(analog_save_path)
+        self.wb_digital.save(digital_save_path)
         
         # Limpiar los archivos temporales
         shutil.rmtree(rpath('./temp'))
         
         # Opcional: cerrar los archivos si ya no se van a utilizar
-        self.wb_analog.Close(SaveChanges=False)
-        self.wb_digital.Close(SaveChanges=False)
-        self.excel.Quit()
+        self.wb_analog.close()
+        self.wb_digital.close()
+        self.app.quit()
 
 if __name__ == "__main__":
     # Ejemplo de uso
