@@ -1,11 +1,11 @@
-from .InstrumentController import EtlManager, FPHManager, MSDManager
+from .InstrumentController import EtlManager, FPHManager, MSDManager, ViaviManager
 from src.utils.constants import *
 from collections import defaultdict
 import json
 import os
 
 class MeasurementManager:
-    def __init__(self, dtv: EtlManager, atv: EtlManager, mbk: EtlManager|FPHManager, rtr: MSDManager|None):
+    def __init__(self, dtv: EtlManager, atv: EtlManager, mbk: EtlManager|FPHManager|ViaviManager, rtr: MSDManager|None):
         self.dtv = dtv
         self.atv = atv
         self.mbk = mbk
@@ -457,7 +457,14 @@ class MeasurementManager:
             os.makedirs(f"{path}")
 
             # El diccionario de medidas depende del modelo del instrumento
-            bank_dict = BANDS_ETL if self.mbk.instrument_model_name == "ETL" else BANDS_FXH
+            if self.mbk.instrument_model_name == "ETL":
+                bank_dict = BANDS_ETL
+            elif self.mbk.instrument_model_name == "ONA-800":
+                bank_dict = BANDS_VIAVI
+            else:
+                bank_dict = BANDS_FXH
+                
+        
             total_bands = len(bank_dict.keys())
             current_band = 0
 
@@ -474,7 +481,7 @@ class MeasurementManager:
 
             progress_callback(1, 1, "¡Medición de banco completada con éxito")
         except Exception as e:
-            progress_callback(1, 1, f"Error en la medición de banco: {str(e)}")
+            progress_callback(1, 1, f"Error en la medición de banco.")
             raise e
     
 

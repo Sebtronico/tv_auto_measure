@@ -2,14 +2,18 @@ from .InstrumentManager import InstrumentManager
 from .SNMPManager import SNMPManager
 from .TxCheckManager import TxCheckManager
 from src.utils.constants import *
+from src.utils.ViaviInstrument import ViaviInstrument
 import time
 import statistics
 import csv
 import numpy as np
+import math
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import os
+from datetime import datetime
+import pyvisa
 
 class EtlManager(InstrumentManager):
     def __init__(self, ip_address: str, impedance: int, transducers: list):
@@ -814,7 +818,7 @@ class EtlManager(InstrumentManager):
         # Configuraciones generales para todas las bandas
         self.measurement_bank_setup(band)
 
-        sweep_points = 711
+        sweep_points = 501
         self.write_str(f'SWE:POIN {sweep_points}')
         self.write_str(f'SWE:COUN 0') # Configuración del número de trazas
         self.write_str('DISP:TRAC1:MODE WRIT') # Configuración del modo de traza
@@ -852,7 +856,6 @@ class EtlManager(InstrumentManager):
         matrix_traces = np.array(traces)
         self.plot_avg_max_min(matrix_traces, frequency_vector, filename, BANDS_ETL[band][6])
         self.plot_spectrogram(matrix_traces, frequency_vector, filename, BANDS_ETL[band][6])
-
 
 
 class FPHManager(InstrumentManager):
@@ -1114,7 +1117,7 @@ class FPHManager(InstrumentManager):
         # Configuraciones generales para todas las bandas
         self.measurement_bank_setup(band)
 
-        sweep_points = 711
+        sweep_points = 501
         self.write_str(f'SWE:POIN {sweep_points}')
         self.write_str(f'SWE:COUN 1') # Configuración del número de trazas
         self.write_str('DISP:TRAC1:MODE WRIT') # Configuración del modo de traza
@@ -1142,7 +1145,7 @@ class FPHManager(InstrumentManager):
             # Escribir encabezado
             writer.writerow([f"{i}" for i in frequency_vector.tolist()])  # Ajusta el número de puntos según el instrumento
             
-            for _ in range(5):
+            for _ in range(100):
                 self.write_str('INIT;*WAI')
                 waveform = self.query_bin_or_ascii_float_list_with_opc('TRAC? TRACE1')
                 traces.append(waveform)
@@ -1153,6 +1156,258 @@ class FPHManager(InstrumentManager):
         self.plot_avg_max_min(matrix_traces, frequency_vector, filename, BANDS_FXH[band][6])
         self.plot_spectrogram(matrix_traces, frequency_vector, filename, BANDS_FXH[band][6])
 
+
+class ViaviManager(ViaviInstrument):
+    def __init__(self, ip_address: str, impedance: int, transducers: list):
+        self.ip_address = ip_address
+        self.impedance = int(impedance)
+        self.transducers = transducers
+        super().__init__(ip_address)
+
+    # Función para graficar promedio, máximo y mínimo
+    @staticmethod
+    def plot_avg_max_min(matrix: np.ndarray, frequency_vector: np.ndarray, filename: str, unit: str):
+        average = np.mean(matrix, axis=0)
+        maxhold = np.max(matrix, axis=0)
+        minhold = np.min(matrix, axis=0)
+
+        ylim_min = min(minhold) * 0.95 if min(minhold) > 0 else min(minhold) * 1.05
+        ylim_max = max(maxhold) * 0.95 if max(maxhold) < 0 else max(maxhold) * 1.05
+
+        # Graficar los resultados
+        plt.figure(figsize=(12.8, 7.2), dpi=100)
+
+        power_unit = unit
+        # Gráfica del promedio
+        plt.subplot(3, 1, 1)
+        plt.plot(frequency_vector, average, label='Average', color='blue')
+        plt.title('Promedio')
+        plt.xlabel('Frecuencia [MHz]')
+        plt.ylabel(f'Potencia [{power_unit}]')
+        plt.legend()
+        plt.grid()
+        plt.xlim(min(frequency_vector), max(frequency_vector))
+        plt.ylim(ylim_min, ylim_max)
+
+        # Gráfica del máximo
+        plt.subplot(3, 1, 2)
+        plt.plot(frequency_vector, maxhold, label='Max hold', color='green')
+        plt.title('Máximo')
+        plt.xlabel('Frecuencia [MHz]')
+        plt.ylabel(f'Potencia [{power_unit}]')
+        plt.legend()
+        plt.grid()
+        plt.xlim(min(frequency_vector), max(frequency_vector))
+        plt.ylim(ylim_min, ylim_max)
+
+        # Gráfica del mínimo
+        plt.subplot(3, 1, 3)
+        plt.plot(frequency_vector, minhold, label='Min hold', color='red')
+        plt.title('Mínimo')
+        plt.xlabel('Frecuencia [MHz]')
+        plt.ylabel(f'Potencia [{power_unit}]')
+        plt.legend()
+        plt.grid()
+        plt.xlim(min(frequency_vector), max(frequency_vector))
+        plt.ylim(ylim_min, ylim_max)
+
+        # Ajustar el layout para que no se solapen las gráficas
+        plt.tight_layout()
+
+        # Mostrar las gráficas
+        plt.savefig(f"{filename}.png")
+        plt.close()
+
+
+    # Función para obtener la fecha del nombre de la carpeta de 
+    @staticmethod
+    def get_date_for_bank_folder():
+        array_date = datetime.today()
+        date = f"{array_date.year % 100}{str(array_date.month).zfill(2)}{str(array_date.day).zfill(2)}"
+
+        return date
+    
+
+    def get_coordinates(self):
+        try:
+            latitude = self.query_str_with_opc('SYSTem:GNSS:LATitud?')
+            longitude = self.query_str_with_opc('SYSTem:GNSS:LATitud?')
+            return latitude, longitude
+        except pyvisa.errors.VisaIOError:
+            return None, None
+
+
+    @staticmethod
+    def decimal_coords_to_dms(latitude, longitude):
+        if latitude and longitude:
+            lat_deg = int(abs(latitude))
+            lat_min_dec = (abs(latitude) - lat_deg) * 60
+            lat_min = int(lat_min_dec)
+            lat_seg = (lat_min_dec - lat_min) * 60
+            lat_direction = "N" if latitude >= 0 else "S"
+            lat_dms = f"{lat_deg}° {lat_min}' {lat_seg:.2f}\" {lat_direction}".replace('.', ',')
+
+            # Conversión de longitud
+            lon_deg = int(abs(longitude))
+            lon_min_dec = (abs(longitude) - lon_deg) * 60
+            lon_min = int(lon_min_dec)
+            lon_seg = (lon_min_dec - lon_min) * 60
+            lon_direction = "E" if longitude >= 0 else "W"
+            lon_dms = f"{lon_deg}° {lon_min}' {lon_seg:.2f}\" {lon_direction}".replace('.', ',')
+
+            return lat_dms, lon_dms
+        else:
+            return 'Sin lectura', 'Sin lectura'
+
+
+    # Función para graficar espectrograma
+    @staticmethod
+    def plot_spectrogram(matrix: np.ndarray, frequency_vector: np.ndarray, filename: str, unit: str):
+        plt.figure(figsize=(12.8, 7.2), dpi=100)
+
+        extent = [min(frequency_vector), max(frequency_vector), 0, len(matrix)]  # Rango de frecuencia en X, número de muestras en Y
+        plt.imshow(matrix, aspect='auto', extent=extent, origin='lower', cmap='inferno')
+
+        power_unit = unit
+        # Etiquetas y título
+        plt.xlabel("Frecuencia [MHz]")
+        plt.ylabel("Muestra")
+        plt.title("Espectrograma")
+        plt.colorbar(label=f"Potencia [{power_unit}]")
+
+        plt.savefig(f"{filename}_E.png")
+        plt.close()
+
+
+    def get_variables_for_csv(self, latitude: str, longitude: str):
+        # Se obtiene la fecha
+        today = datetime.today()
+        date = f'{today.year}/{str(today.month).zfill(2)}/{str(today.day).zfill(2)}'
+
+        # Se obtiene la hora
+        now = datetime.now()
+        hour = f'{str(now.hour).zfill(2)}:{str(now.minute).zfill(2)}:{str(now.second).zfill(2)}'
+
+        return [
+            ['Equipo', self.full_instrument_model_name],
+            ['Versión', self.instrument_firmware_version],
+            ['Fecha', date],
+            ['Hora', hour],
+            ['Serial', self.instrument_serial_number],
+            ['Latitud', latitude],
+            ['Longitud', longitude],
+            ['Frecuencia central', self.query_float_with_opc('SPEC:FREQ:CENT?') * 1e6],
+            ['Frecuencia inicial', self.query_float_with_opc('SPEC:FREQ:STAR?') * 1e6],
+            ['Frecuencia final', self.query_float_with_opc('SPEC:FREQ:STOP?') * 1e6],
+            ['Span', self.query_float_with_opc('SPEC:FREQ:SPAN?') * 1e6],
+            ['Nivel de referencia', round(self.query_float_with_opc('SPEC:AMP:REF?'), 2)],
+            ['Offset', self.query_float_with_opc('SPECtrum:AMPlitude:EXTernal?')],
+            ['Resolución de ancho de banda', self.query_float_with_opc('SPEC:RBW?') * 1e6],
+            ['Video de ancho de banda', self.query_float_with_opc('SPEC:VBW?') * 1e6],
+            ['Tiempo de barrido', self.query_float_with_opc('SPEC:SWEE:TIME?') / 1e6],
+            ['Modo de traza', self.query_str_with_opc('SPEC:TRAce1:MODE?')],
+            ['Detector', self.query_str_with_opc('SPEC:TRAce:DET?')],
+            ['Unidades-x', 'Hz'],
+            ['Unidades-y', self.query_str_with_opc('SPEC:AMP:UNIT?')],
+            ['Preamplificador', False]
+        ]
+
+
+    # Función para configuración inicial del banco de mediciones
+    def measurement_bank_setup(self, band: str):
+
+        # Configuraciones generales para todas las bandas
+        self.write('*REM') # Configura el instrumento al modo "Spectrum Analyzer"
+        # self.write('MODE spectrumAnalyzer')
+        self.write('SPECtrum:CONFigure:RESEt')
+        self.write('SPECtrum:TRAce:CLEAr:ALL')
+
+        self.write('SPEC:TRAce:DET RMS') # Selecciona el detector "RMS"
+        self.write('SPEC:AMP:ATT 0') # Atenuación a 0
+
+        # Configuración por cada banda
+        self.write_str(f'SPEC:AMP:UNIT {BANDS_VIAVI[band][6]}') # Configuración de la unidad
+        
+        # Configuración del instrumento según la banda
+        self.write_str(f'SPEC:FREQ:STAR {BANDS_VIAVI[band][0]} MHz') # Configuración de la frecuencia inicial
+        self.write_str(f'SPEC:FREQ:STOP {BANDS_VIAVI[band][1]} MHz') # Configuración de la frecuencia final
+        self.write_str('SPECtrum:RBW:MODE Manual')
+        self.write_str('SPECtrum:VBW:MODE Manual')
+        self.write_str(f'SPEC:RBW {BANDS_VIAVI[band][3]} kHz') # Configuración del resolution bandwidth
+        self.write_str(f'SPEC:VBW {BANDS_VIAVI[band][2]} kHz') # Configuración del video bandwidth
+        
+        # Definición del reference level, según el puerto seleccionado
+        reference_level = 92 if self.impedance == 50 else 98.80
+
+        # Ajuste del nivel de referencia, según el puerto seleccionado y la unidad de medida.
+        if BANDS_VIAVI[band][6] == 'dBm':
+            self.write_str(f'SPEC:AMP:REF {BANDS_VIAVI[band][4]}') # Configuración del nivel de referencia
+        elif BANDS_VIAVI[band][6] == 'dBuV':
+            import math
+            adjusted_reference_level = BANDS_VIAVI[band][4] - 10 * math.log10(self.impedance) - 90
+            self.write_str(f'SPEC:AMP:REF {adjusted_reference_level}') # Configuración del nivel de referencia
+
+
+    # Función para banco de mediciones en el modo de obtener varias trazas con el .csv
+    def continuous_measurement_bank(self, band: str, path: str, latitude: str, longitude: str):
+
+        # Configuraciones generales para todas las bandas
+        self.measurement_bank_setup(band)
+
+        sweep_points = 501
+        self.write_str('SPECtrum:SWEEp:MODE Single')
+        self.write_str('SPECtrum:TRAce1:TYPE ClearWrite') # Configuración del modo de traza
+        self.write_str('SPECtrum:SWEEp:ONCE')
+
+        # Nombre del .csv que se generará
+        filename = f'{path}/{BANDS_VIAVI[band][0]} - {BANDS_VIAVI[band][1]}'
+        
+        # Se obtienen las variables para incluir al principio del csv
+        initial_data = self.get_variables_for_csv(latitude, longitude)
+
+        # Escribir las líneas en el archivo .csv
+        with open(f'{filename}.csv', 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f, delimiter=';')  # Usa ";" como separador
+
+            # Se escriben las líneas iniciales
+            for row in initial_data:
+                writer.writerow(row)
+            
+            # Variables para las gráficas y para csv
+            frequency_vector = np.linspace(BANDS_VIAVI[band][0], BANDS_VIAVI[band][1], sweep_points)
+            traces = []
+
+            # Escribir encabezado
+            writer.writerow([f"{i}" for i in frequency_vector.tolist()])  # Ajusta el número de puntos según el instrumento
+            unit = self.query('SPECtrum:AMPlitude:UNIT?')
+            sweep_time = self.query_float_with_opc('SPECtrum:SWEEp:TIME?') / 1e6
+            
+            for _ in range(100):
+                self.write_str('SPECtrum:SWEEp:ONCE')
+                self.write_str('*WAI')
+                time.sleep(sweep_time*15)
+                waveform = self.query_bin_or_ascii_float_list('SPECtrum:TRACe:DATA?')[:501]
+                waveform = self.convert_units(waveform, unit)
+                traces.append(waveform)
+                writer.writerow(waveform)
+
+        # Generación de gráficas
+        matrix_traces = np.array(traces)
+        self.plot_avg_max_min(matrix_traces, frequency_vector, filename, BANDS_VIAVI[band][6])
+        self.plot_spectrogram(matrix_traces, frequency_vector, filename, BANDS_VIAVI[band][6])
+
+
+    @staticmethod
+    def convert_units(array: list, unit: str):
+        np_array = np.array(array)
+        
+        if unit == 'dBm':
+            return np_array.tolist()
+        elif unit == 'dBuV':
+            adjusted_array = np_array + 10 * math.log10(50) + 90
+            return adjusted_array.tolist()
+        else:
+            return None
 
 
 class MSDManager(InstrumentManager):
@@ -1193,9 +1448,9 @@ class MSDManager(InstrumentManager):
         
 
 if __name__ == '__main__':
-    etl = FPHManager('192.168.0.7')
-    etl.reset()
-    latitude, longitude = etl.get_coordinates()
-    latitude, longitude = etl.decimal_coords_to_dms(latitude, longitude)
+    viavi = ViaviManager('192.168.0.7')
+    viavi.reset()
+    # latitude, longitude = viavi.get_coordinates()
+    # latitude, longitude = viavi.decimal_coords_to_dms(latitude, longitude)
     
-    etl.continuous_measurement_bank(50, [], 'Enlace', './tests/test_bank', latitude, longitude)
+    viavi.continuous_measurement_bank('Enlace', './tests/', '---', '---')

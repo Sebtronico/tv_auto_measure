@@ -5,7 +5,7 @@ from tkinter import filedialog
 import threading
 from src.core.ReadExcel import ReadExcel
 from src.core.InstrumentManager import InstrumentManager
-from src.core.InstrumentController import EtlManager, FPHManager, MSDManager
+from src.core.InstrumentController import EtlManager, FPHManager, ViaviManager, MSDManager
 from src.core.MeasurementManager import MeasurementManager
 from src.core.ExcelReport import ExcelReport
 from src.utils.constants import *
@@ -1312,6 +1312,11 @@ class BankInstrumentWindow(ctk.CTkFrame):
                                              variable=self.var_tipo_instrumento,
                                              value="FPH")
         self.rb_instrumento_fph.pack(padx=30, pady=5, anchor="w")
+
+        self.rb_instrumento_viavi = ctk.CTkRadioButton(self.frame_instrumento, text="Viavi", 
+                                             variable=self.var_tipo_instrumento,
+                                             value="Viavi")
+        self.rb_instrumento_viavi.pack(padx=30, pady=5, anchor="w")
         
         # Frame para la configuración de IP
         self.frame_ip = ctk.CTkFrame(self.main_container)
@@ -1508,10 +1513,10 @@ class BankInstrumentWindow(ctk.CTkFrame):
                     self.controller.datos.site_dictionary['date_for_mbk_folder'] = date_for_mbk_folder
 
                     conexion_exitosa = True
-                except Exception as e:
+                except:
                     conexion_exitosa = False
                     instrument_model_name = ''
-                    print(e)
+
             elif tipo_instrumento == "FPH":
                 # Código para conectar con el dispositivo
                 try:
@@ -1531,8 +1536,30 @@ class BankInstrumentWindow(ctk.CTkFrame):
                     conexion_exitosa = True
                 except:
                     conexion_exitosa = False
-                    instrument_model_name = ''            
-            
+                    instrument_model_name = ''    
+
+            elif tipo_instrumento == 'Viavi':
+                # Código para conectar con el dispositivo
+                try:
+                    # Creación del objeto de conexión
+                    mbk_instrument = ViaviManager(ip, impedance, [])
+
+                    # Actualización de los datos compartidos
+                    self.controller.datos.mbk_instrument = mbk_instrument
+                    self.controller.datos.ip_bandas = mbk_instrument.ip_address
+                    self.controller.datos.puerto_bandas = mbk_instrument.impedance
+                    self.controller.datos.transductores_bandas = mbk_instrument.transducers
+                    instrument_model_name = mbk_instrument.instrument_model_name
+
+                    date_for_mbk_folder = mbk_instrument.get_date_for_bank_folder()
+                    self.controller.datos.site_dictionary['date_for_mbk_folder'] = date_for_mbk_folder
+
+                    conexion_exitosa = True
+                except:
+                    conexion_exitosa = False
+                    instrument_model_name = ''
+
+
             # Actualizar la UI desde el hilo principal
             self.after(0, lambda: self.actualizar_estado_conexion(ip, conexion_exitosa, instrument_model_name))
         
@@ -2056,6 +2083,11 @@ class SummaryWindow(ctk.CTkFrame):
             response = msg.get()
             return response == "Continuar"  # Devuelve True si el usuario selecciona "Continuar"
         
+        # Mostrar botón de finalizar (en el hilo principal)
+        def show_finish_button():
+            self.controller.datos.medicion_completada = True
+            self.btn_finalizar.pack(side="right", padx=10, pady=10)
+
         # Iniciar proceso de medición en un hilo separado
         def start_measurement(self):
             pythoncom.CoInitializeEx(pythoncom.COINIT_APARTMENTTHREADED)
@@ -2080,8 +2112,7 @@ class SummaryWindow(ctk.CTkFrame):
                 )
                 storage_path_tv = rpath(f"{root_path}/{municipality}/P{str(point).zfill(2)}")
 
-                # Verificar si mbk no es None y crear la segunda barra de progreso si es necesario
-                mbk_parallel = False
+                # Verificar si mbk no es None
                 if measurement_manager.mbk is not None:
                     # Definición de la ruta de almacenamiento de soportes para tv
                     date = self.controller.datos.site_dictionary['date_for_mbk_folder']
@@ -2095,41 +2126,9 @@ class SummaryWindow(ctk.CTkFrame):
                     else:
                         dane_code = self.controller.datos.object_preengeneering.get_dane_code(municipality)
                         storage_path_bank = rpath(f"{root_path}/{dane_code}_{date}_{municipality.replace(' ', '-').upper()}_P{point}")
-                    
-                    if measurement_manager.dtv is not None:
-                        if (measurement_manager.mbk.ip_address != measurement_manager.dtv.ip_address):
-                            mbk_parallel = True
-
-                            # Crear segunda barra de progreso para medición paralela
-                            self.progreso_mbk = ctk.CTkProgressBar(self)
-                            self.progreso_mbk.set(0)
-                            self.progreso_mbk.pack(pady=5, padx=20, fill="x")
-                            self.lbl_estado_medicion_mbk = ctk.CTkLabel(self, text="Preparando medición de banco...")
-                            self.lbl_estado_medicion_mbk.pack(pady=2)
 
                 # Actualizar progreso
                 progress_callback(0, 1, "Realizando mediciones SFN...")
-
-                # Si mbk existe y es paralelo, iniciar medición en hilo separado
-                if mbk_parallel:
-                    # Callback para actualizar la barra de progreso de mbk
-                    def mbk_progress_callback(current, total, message=""):
-                        percent = current / total if total > 0 else 0
-                        def update_mbk_ui():
-                            self.progreso_mbk.set(percent)
-                            self.lbl_estado_medicion_mbk.configure(
-                                text=f"Progreso de medición de banco: {int(percent * 100)}% - {message}"
-                            )
-                            self.update()
-                        self.after(0, update_mbk_ui)
-                    
-                    # Iniciar medición de mbk en hilo separado
-                    mbk_thread = threading.Thread(
-                        target=measurement_manager.mbk_measurement,
-                        args=(storage_path_bank, mbk_progress_callback),
-                        daemon=True
-                    )
-                    mbk_thread.start()
 
                 # Hacer medición de SFN en caso de que sea necesario
                 if measurement_manager.atv is not None and measurement_manager.dtv is not None:
@@ -2177,34 +2176,30 @@ class SummaryWindow(ctk.CTkFrame):
                             sfn_dictionary = self.controller.datos.sfn_dictionary
                         )
                     except:
-                        progress_callback(1, 1, "Error al generar reportes :(")
+                        progress_callback(1, 1, "Error al generar reportes.")
                         self.after(0, show_finish_button)
 
                 # Ejecutar mbk_measurement secuencialmente si no es paralelo
-                if measurement_manager.mbk is not None and not mbk_parallel:
+                if measurement_manager.mbk is not None:
                     progress_callback(0.95, 1, "Iniciando medición de banco...")
+                    msg = CTkMessagebox(title="Iniciando medición de banco de mediciones",
+                                  message="Conecte la antena para medir banco al instrumento seleccionado.\n Cuando esté conectada, de clic en el botón.")
+                    msg.get()
                     measurement_manager.mbk_measurement(storage_path_bank, progress_callback)
 
                 # Completar medición
                 progress_callback(1, 1, "¡Medición completada con éxito!")
                 
-                # Mostrar botón de finalizar (en el hilo principal)
-                def show_finish_button():
-                    self.controller.datos.medicion_completada = True
-                    self.btn_finalizar.pack(side="right", padx=10, pady=10)
-                
                 self.after(0, show_finish_button)
                 
-                # except Exception as e:
-                #     # Manejar errores y mostrarlos al usuario
-                #     def show_error():
-                #         error_msg = f"Error durante la medición: {str(e)}"
-                #         self.lbl_estado_medicion.configure(text=error_msg)
-                #         CTkMessagebox(title="Error", message=error_msg, icon="error")
-                #         # Volver a mostrar el botón de inicio
-                #         self.btn_iniciar.pack(side="right", padx=10, pady=10)
-                    
-                #     self.after(0, show_error)
+            except Exception:
+                # Manejar errores y mostrarlos al usuario
+                error_msg = f"Error durante la medición."
+                self.lbl_estado_medicion.configure(text=error_msg)
+                CTkMessagebox(title="Error", message=error_msg, icon="error")
+                # Volver a mostrar el botón de inicio
+                self.btn_iniciar.pack(side="right", padx=10, pady=10)
+
             finally:
                 pythoncom.CoUninitialize()
         

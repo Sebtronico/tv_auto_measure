@@ -181,6 +181,35 @@ BANDS_FXH = {
     'FM':     [88,     108,    30,   10,  82,   'AVERage', 'DUVM'],
 }
 
+# Definición del diccionario con los parámetros de cada banda
+BANDS_VIAVI = {
+    #Band        Fi      Ff     VBW   RBW   ref   tr. mode    unit 
+    '700':     [703,    803,    30,   100, -25,   'AVERage', 'dBm'],
+    '850':     [824,    894,    30,   100, -25,   'AVERage', 'dBm'],
+    '815':     [806,    824,    30,   100, -25,   'AVERage', 'dBm'],
+    '1900':    [1850,   1990,   30,   100, -25,   'AVERage', 'dBm'],
+    'AWS1':    [1755,   1780,   10,   30,  -25,   'Max',     'dBm'],
+    'AWS2':    [2155,   2180,   10,   30,  -25,   'Max',     'dBm'],
+    'AWS3':    [2170,   2200,   10,   30,  -25,   'Max',     'dBm'],
+    '2.5':     [2500,   2690,   30,   100, -25,   'Max',     'dBm'],
+    '900_1':   [894,    915,    10,   30,  -60,   'Max',     'dBm'],
+    '900_2':   [900,    928,    10,   30,  -60,   'AVERage', 'dBm'],
+    '3500':    [3300,   3700,   30,   100, -40,   'Max',     'dBm'],
+    '2.4GHz':  [2400,   2483.5, 10,   30,  -60,   'Max',     'dBm'],
+    '5GHz':    [5180,   5825,   30,   100, -60,   'Max',     'dBm'],
+    '6GHz_1':  [5925,   6525,   30,   100, -60,   'Max',     'dBm'],
+    '6GHz_2':  [6525,   7125,   30,   100, -60,   'Max',     'dBm'],
+    '2300MHz': [2300,   2400,   30,   100, -60,   'AVERage', 'dBm'],
+    'Enlace':  [300,    330,    10,   30,  82,    'AVERage', 'dBuV'],
+    'tv_b1':   [54,     88,     10,   30,  82,    'AVERage', 'dBuV'],
+    'tv_b3':   [174,    216,    10,   30,  82,    'AVERage', 'dBuV'],
+    'tv_d':    [470,    512,    10,   30,  82,    'AVERage', 'dBuV'],
+    'tv_b4':   [512,    608,    10,   30,  82,    'AVERage', 'dBuV'],
+    'tv_b4_5': [614,    656,    10,   30,  82,    'AVERage', 'dBuV'],
+    'tv_b5':   [656,    698,    10,   30,  82,    'AVERage', 'dBuV'],
+    'FM':      [88,     108,    10,   30,  82,    'AVERage', 'dBuV'],
+}
+
 UNITS_ETL = {
     'DBM': 'dBm',
     'DBUV': 'dBμV',
