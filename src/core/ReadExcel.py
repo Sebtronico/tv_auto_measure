@@ -237,17 +237,21 @@ class ReadExcel:
             return dictionary
 
         new_station = new_station_dictionary['station']
+        tec = new_station_dictionary['tecnologia']
         acimuth = new_station_dictionary['acimuth']
         channel = new_station_dictionary['channel']
         service = new_station_dictionary['service']
 
-        if new_station not in list(dictionary.keys()):
-            dictionary.update({new_station: {'Acimuth': 0, 'Analógico': {}, 'Digital': {}}})
-            dictionary[new_station]['Acimuth'] = acimuth
-            dictionary[new_station]['Analógico'] = {}
-            dictionary[new_station]['Digital'] = {service: channel}
-        else:
-            dictionary[new_station]['Digital'].update({service: channel})
+        station_data = dictionary.setdefault(new_station, {'Acimuth': 0, 'Analógico': {}, 'Digital': {}})
+
+        # Actualizar acimuth si es la primera vez que se añade o si es diferente
+        station_data['Acimuth'] = acimuth
+
+        # Actualizar la tecnología específica
+        if tec == 'Analógico':
+            station_data['Analógico'].update({service: channel})
+        elif tec == 'Digital':
+            station_data['Digital'].update({service: channel})
 
         return self.sort_dictionary(dictionary)
 

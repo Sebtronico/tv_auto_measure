@@ -388,8 +388,9 @@ class AutocompleteEntry(ctk.CTkEntry):
 class AddChannelWindow(ctk.CTkToplevel):
     def __init__(self, master=None):
         super().__init__(master)
+        self.master = master
         self.title("Añadir canal")
-        self.geometry("400x210")
+        self.geometry("400x255")
         self.after(200, lambda:self.wm_iconbitmap(rpath("./resources/logoAne.ico")))  # Retraso para correcto cargue del logo
         self.grab_set()        
 
@@ -398,43 +399,85 @@ class AddChannelWindow(ctk.CTkToplevel):
         # Se configura el ancho de la segunda columna de ingreso de datos
         self.grid_columnconfigure(1, weight=1)
 
+        # Selección de tecnología
+        label_tec = ctk.CTkLabel(self, text="Tecnología del canal:")
+        label_tec.grid(row=0, column=0, padx=10, pady=10, sticky="w")
+
+        selected_tec_var = tk.StringVar(self)
+        selected_tec_var.set("Seleccione la tecnología")
+        self.tec_list = ctk.CTkOptionMenu(self, values=['Analógico', 'Digital'], variable=selected_tec_var, command=self.tec_selected)
+        self.tec_list.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
+
         # Selección de canal
         label_channel = ctk.CTkLabel(self, text="Numero del canal:")
-        label_channel.grid(row=0, column=0, padx=10, pady=10, sticky="w")
+        label_channel.grid(row=1, column=0, padx=10, pady=10, sticky="w")
 
         self.channel_entry = ctk.CTkEntry(self, placeholder_text="0")
-        self.channel_entry.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
+        self.channel_entry.grid(row=1, column=1, padx=10, pady=10, sticky="ew")
 
         # Selección de servicio
         label_service = ctk.CTkLabel(self, text="Servicio:")
-        label_service.grid(row=1, column=0, padx=10, pady=10, sticky="w")
+        label_service.grid(row=2, column=0, padx=10, pady=10, sticky="w")
 
-        self.service_list = ctk.CTkOptionMenu(self, values=list(PLP_SERVICES.keys()))
-        self.service_list.grid(row=1, column=1, padx=10, pady=10, sticky="ew")
-
-        # Obtención de la lista de estaciones del diccionario
-        station_list = []
-        measurement_dictionary = master.datos.measurement_dictionary
-        for station in measurement_dictionary.keys():
-            if measurement_dictionary[station]['Digital']:
-                station_list.append(station)
-        
-        station_list.append('---Otra')
+        self.service_list = ctk.CTkOptionMenu(self, values=['Seleccione la tecnología'], state='disabled', command=self.service_selected)
+        self.service_list.grid(row=2, column=1, padx=10, pady=10, sticky="ew")
 
         # Selección de la estación de procedencia
         label_station = ctk.CTkLabel(self, text="Estación de procedencia:")
-        label_station.grid(row=2, column=0, padx=10, pady=10, sticky="w")
+        label_station.grid(row=3, column=0, padx=10, pady=10, sticky="w")
         
-        self.list_station = ctk.CTkOptionMenu(self, values=station_list, command=self.station_selected)
-        self.list_station.grid(row=2, column=1, padx=10, pady=10, sticky="ew")
+        self.list_station = ctk.CTkOptionMenu(self, values=['Seleccione la tecnología'], state='disabled', command=self.station_selected)
+        self.list_station.grid(row=3, column=1, padx=10, pady=10, sticky="ew")
 
         # Botón de cancelar
         self.cancel_button = ctk.CTkButton(self, text="Cancelar", command=self.cancel)
-        self.cancel_button.grid(row=3, column=0, pady=20)
+        self.cancel_button.grid(row=4, column=0, pady=20)
 
         # Botón de guardar
         self.save_button = ctk.CTkButton(self, text="Guardar", command=self.save)
-        self.save_button.grid(row=3, column=1, pady=20)
+        self.save_button.grid(row=4, column=1, pady=20)
+
+    def tec_selected(self, event):
+        tec = self.tec_list.get()
+
+        if tec == 'Analógico':
+            # Obtención de la lista de estaciones del diccionario
+            station_list = []
+            measurement_dictionary = self.master.datos.measurement_dictionary
+            for station in measurement_dictionary.keys():
+                if measurement_dictionary[station]['Analógico']:
+                    station_list.append(station)
+            
+            station_list.append('---Otra')
+            
+            # Se configura la lista de servicios
+            df = pd.read_excel(rpath('./src/utils/Referencias.xlsx'), sheet_name = 4)
+            service_list = df.columns.tolist()
+            self.service_list.configure(values=service_list, state='enabled')
+
+            # Se configura la lista de estaciones disponibles
+            self.list_station.configure(values=station_list)
+
+
+        elif tec == 'Digital':
+            # Obtención de la lista de estaciones del diccionario
+            station_list = []
+            measurement_dictionary = self.master.datos.measurement_dictionary
+            for station in measurement_dictionary.keys():
+                if measurement_dictionary[station]['Digital']:
+                    station_list.append(station)
+            
+            station_list.append('---Otra')
+            
+            # Se configura la lista de servicios
+            service_list = list(PLP_SERVICES.keys())
+            self.service_list.configure(values=service_list, state='enabled')
+
+            # Se configura la lista de estaciones disponibles
+            self.list_station.configure(values=station_list)
+
+    def service_selected(self, event):
+        self.list_station.configure(state='enabled')
 
     def station_selected(self, event):
         selected_station = self.list_station.get()
@@ -442,34 +485,40 @@ class AddChannelWindow(ctk.CTkToplevel):
         # Se revisa la estación seleccionada
         if selected_station == '---Otra':
             # Se redimensiona la ventana para visualizar todos los widgets
-            self.geometry("400x300")
+            self.geometry("400x345")
 
             # Se añaden label y entry con autocompletado para elegir la estación
             self.label_another_station = ctk.CTkLabel(self, text="Seleccione la estación:")
-            self.label_another_station.grid(row=3, column=0, padx=10, pady=10, sticky="w")
+            self.label_another_station.grid(row=4, column=0, padx=10, pady=10, sticky="w")
             
             # Cargue de lista de estaciones
-            df = pd.read_excel(rpath('./src/utils/Referencias.xlsx'), sheet_name = 2)
-            available_stations = df['TX_TDT'].tolist()
+            if self.tec_list.get() == 'Analógico':
+                service = self.service_list.get()
+                df = pd.read_excel(rpath('./src/utils/Referencias.xlsx'), sheet_name = 4)
+                available_stations = df[service].dropna().tolist()
+
+            elif self.tec_list.get() == 'Digital':
+                df = pd.read_excel(rpath('./src/utils/Referencias.xlsx'), sheet_name = 2)
+                available_stations = df['TX_TDT'].tolist()
 
             # Entry con autocompletado para seleccionar la estación
             self.new_station_entry = AutocompleteEntry(self, options_list=available_stations, listbox_width=210, placeholder_text="Ingrese la estación")
-            self.new_station_entry.grid(row=3, column=1, padx=10, pady=10, sticky="ew")
+            self.new_station_entry.grid(row=4, column=1, padx=10, pady=10, sticky="ew")
 
             # Selección de acimut
             self.label_acimuth = ctk.CTkLabel(self, text="Ingrese el acimut:")
-            self.label_acimuth.grid(row=4, column=0, padx=10, pady=10, sticky="w")
+            self.label_acimuth.grid(row=5, column=0, padx=10, pady=10, sticky="w")
 
             self.acimut_entry = ctk.CTkEntry(self, placeholder_text="0")
-            self.acimut_entry.grid(row=4, column=1, padx=10, pady=10, sticky="ew")
+            self.acimut_entry.grid(row=5, column=1, padx=10, pady=10, sticky="ew")
 
             # Reposicionar los botones de guardar y cancelar
-            self.cancel_button.grid(row=5, column=0, pady=20)
-            self.save_button.grid(row=5, column=1, pady=20)
+            self.cancel_button.grid(row=6, column=0, pady=20)
+            self.save_button.grid(row=6, column=1, pady=20)
 
         # Si se selecciona una estación de las que ya están en la lista
         else:
-            self.geometry("400x210")
+            self.geometry("400x255")
             if hasattr(self, 'new_station_entry') and hasattr(self, 'acimut_entry'):
                 self.label_another_station.destroy()
                 self.new_station_entry.destroy()
@@ -477,11 +526,14 @@ class AddChannelWindow(ctk.CTkToplevel):
                 self.acimut_entry.destroy()
 
             # Reposicionar los botones de guardar y cancelar
-            self.cancel_button.grid(row=3, column=0, pady=20)
-            self.save_button.grid(row=3, column=1, pady=20)
+            self.cancel_button.grid(row=4, column=0, pady=20)
+            self.save_button.grid(row=4, column=1, pady=20)
 
     def save(self):
-        # Obtención del número de canal
+        # Se obtiene el tipo de tecnología
+        self.datos['tecnologia'] = self.tec_list.get()
+
+        # Se obtiene el número de canal
         try:
             channel = int(self.channel_entry.get())
             if channel in list(TV_TABLE.keys()):
@@ -493,7 +545,7 @@ class AddChannelWindow(ctk.CTkToplevel):
             CTkMessagebox(title="Error", message="El número de canal debe ser un número entero.")
             return
 
-        # Obtención del servicio
+        # Se obtiene el servicio
         self.datos['service'] = self.service_list.get()
 
         # Obtención de la estación
@@ -504,7 +556,7 @@ class AddChannelWindow(ctk.CTkToplevel):
         else:
             self.datos['station'] = self.list_station.get()
 
-        # Obtención del acimut
+        # Obtención el acimut
         if hasattr(self, 'acimut_entry'):
             try:
                 acimuth = int(self.acimut_entry.get())
