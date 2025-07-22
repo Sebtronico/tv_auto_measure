@@ -2247,11 +2247,11 @@ class SummaryWindow(ctk.CTkFrame):
                         )
                     except:
                         progress_callback(1, 1, "Error al generar reportes.")
-                        self.after(0, show_finish_button)
+                        
 
                 # Ejecutar mbk_measurement secuencialmente si no es paralelo
                 if measurement_manager.mbk is not None:
-                    progress_callback(0.95, 1, "Iniciando medición de banco...")
+                    progress_callback(0, 1, "Iniciando medición de banco...")
                     msg = CTkMessagebox(title="Iniciando medición de banco de mediciones",
                                   message="Conecte la antena para medir banco al instrumento seleccionado.\n Cuando esté conectada, de clic en el botón.")
                     msg.get()
