@@ -1976,6 +1976,8 @@ class SummaryWindow(ctk.CTkFrame):
         self.lbl_estado_medicion = ctk.CTkLabel(self, text="")
         self.lbl_estado_medicion.pack(pady=5)
         self.lbl_estado_medicion.pack_forget()  # Ocultar inicialmente
+        self.dialog_result = None
+        self.dialog_event = None
     
     def actualizar(self):
         """Actualizar el resumen con los datos actuales"""
@@ -2097,6 +2099,8 @@ class SummaryWindow(ctk.CTkFrame):
         self.lbl_estado_medicion.pack(pady=5)
         self.btn_iniciar.pack_forget()
         
+        self.dialog_event = threading.Event()
+        
         # Define el callback para actualizar la barra de progreso
         def progress_callback(current, total, message=""):
             # Calcular porcentaje
@@ -2115,25 +2119,38 @@ class SummaryWindow(ctk.CTkFrame):
             self.after(0, update_ui)
         
         # Define el callback para la rotación manual
-        def manual_rotation_callback(station):
+        def _show_manual_rotation_dialog(station):
             msg = CTkMessagebox(
                 title="Rotación Manual", 
                 message=f"Gire el rotor hacia {station}.\nUna vez apuntado, haga click en aceptar.",
                 option_1="Aceptar"
             )
-            response = msg.get()
-            return response
+            self.dialog_result = msg.get()
+            self.dialog_event.set()
+
+        def manual_rotation_callback(station):
+            self.dialog_event.clear()
+            self.after(0, _show_manual_rotation_dialog, station)
+            self.dialog_event.wait()
+            return self.dialog_result
         
         # Define el callback para confirmar o repetir la medición
-        def confirm_measurement_callback(canal_info):
+        def _show_confirm_measurement_dialog(canal_info):
             msg = CTkMessagebox(
-                title="Verificación de Medición", 
+                title="Verificación de Medición",
                 message=f"Revise los soportes generados para {canal_info}.\nSi están bien, de clic en continuar, en caso contrario, de clic en repetir para repetir la medición.",
                 option_1="Continuar",
                 option_2="Repetir"
             )
             response = msg.get()
-            return response == "Continuar"  # Devuelve True si el usuario selecciona "Continuar"
+            self.dialog_result = (response == "Continuar")
+            self.dialog_event.set()
+
+        def confirm_measurement_callback(canal_info):
+            self.dialog_event.clear()
+            self.after(0, _show_confirm_measurement_dialog, canal_info)
+            self.dialog_event.wait()
+            return self.dialog_result
         
         # Mostrar botón de finalizar (en el hilo principal)
         def show_finish_button():
@@ -2225,7 +2242,8 @@ class SummaryWindow(ctk.CTkFrame):
                             site_dictionary = self.controller.datos.site_dictionary,
                             analog_measurement_dictionary = atv_result,
                             digital_measurement_dictionary = dtv_result,
-                            sfn_dictionary = self.controller.datos.sfn_dictionary
+                            sfn_dictionary = self.controller.datos.sfn_dictionary,
+                            path = storage_path_tv
                         )
                     except:
                         progress_callback(1, 1, "Error al generar reportes.")

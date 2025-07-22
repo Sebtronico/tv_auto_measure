@@ -74,13 +74,13 @@ class ExcelReport:
 
         return list(set(station_list))
 
-    def plot_elevation_profile(self, lat_point: float, lon_point: float, station_list: list):
+    def plot_elevation_profile(self, lat_point: float, lon_point: float, station_list: list, path: str):
         # Coordenadas del punto de medición
         point_coord = (lat_point, lon_point)
 
         # Cargue del archivo DEM
         # dem_file = rpath("./resources/SRTM_30_Col1.tif")
-        dem_file = rpath("./resources/dem_reducido_deflate.tif")
+        dem_file = rpath("./resources/Colombia_DEM.tif")
         with rasterio.open(dem_file) as dem:
             dem_crs = dem.crs  # Obtener CRS del DEM
 
@@ -160,10 +160,10 @@ class ExcelReport:
             plt.grid()
             plt.xlim(min(distances), max(distances))
             plt.ylim(min(elevations) * 0.9, max(elevations) * 1.05)
-            plt.savefig(rpath(f"./temp/elevation_profile-{station}.png"), dpi=300, bbox_inches="tight", pad_inches=0.25)
+            plt.savefig(rpath(f"{path}/profile_images/elevation_profile-{station}.png"), dpi=300, bbox_inches="tight", pad_inches=0.25)
             plt.close()
 
-    def plot_distances_image(self, lat_point: float, lon_point: float, station_list: list):
+    def plot_distances_image(self, lat_point: float, lon_point: float, station_list: list, path: str):
         # Coordenadas del punto de medición (asegurándose que sea lon, lat para shapely)
         point_coord = (lon_point, lat_point)
 
@@ -188,7 +188,7 @@ class ExcelReport:
         point_gdf = gpd.GeoDataFrame({'name': ['Punto de medición']}, geometry=[Point(point_coord)], crs='EPSG:4326')
 
         # Cargar el archivo raster del mapa base
-        raster_path = './resources/Colombia_Satelital_comprimida.tif' 
+        raster_path = rpath('./resources/Colombia_Satelital.tif')
         
         with rasterio.open(raster_path) as src:
             # Reproyectar las capas al CRS del raster
@@ -309,7 +309,7 @@ class ExcelReport:
             ax.axis('off') # Quitar ejes para una imagen limpia
 
             # Guardar el mapa como archivo de imagen
-            plt.savefig(rpath('./temp/distances.png'), dpi=300, bbox_inches='tight', pad_inches=0)
+            plt.savefig(rpath(f'{path}/profile_images/distances.png'), dpi=300, bbox_inches='tight', pad_inches=0)
             plt.close()
 
     def fill_register_sheet(self, site_dictionary: dict, analog_measurement_dictionary: dict):
@@ -367,7 +367,7 @@ class ExcelReport:
             self.register_sheet.range(f"L{row}").value = dic['frequency_video']
             self.register_sheet.range(f"M{row}").value = dic['frequency_audio']
 
-    def fill_graphical_support_sheet(self, site_dictionary: dict, analog_measurement_dictionary: dict):
+    def fill_graphical_support_sheet(self, site_dictionary: dict, analog_measurement_dictionary: dict, path: str):
         rows_for_images = [3, 22, 41, 63, 82, 101, 123, 142, 161, 183, 202, 221, 243, 262, 281, 303, 322, 341, 363, 382, 401]
 
         for index, (channel, dic) in enumerate(analog_measurement_dictionary.items()):
@@ -376,7 +376,7 @@ class ExcelReport:
                 point = str(site_dictionary['point']).zfill(2)
                 station = dic['station']
                 service_name = dic['service_name']
-                img_path = rpath(f'./results/{municipality}/P{point}/Soportes punto de medición/{station}/CH_{channel}_A_{service_name}/CH_{channel}.png')
+                img_path = rpath(f'{path}//Soportes punto de medición/{station}/CH_{channel}_A_{service_name}/CH_{channel}.png')
 
                 # Verificar que la imagen existe
                 if os.path.exists(img_path):
@@ -392,7 +392,7 @@ class ExcelReport:
                         scale=0.255
                     )
 
-    def fill_general_info_sheet(self, site_dictionary: dict, digital_measurement_dictionary: dict):
+    def fill_general_info_sheet(self, site_dictionary: dict, digital_measurement_dictionary: dict, path: str):
         # Características del punto de medición
         self.general_info_sheet.range("A8").value = site_dictionary['point']
         self.general_info_sheet.range("C8").value = site_dictionary['municipality']
@@ -430,7 +430,7 @@ class ExcelReport:
         rows_for_images = [73, 77, 81, 85, 89, 93, 98, 102]
         for index, station in enumerate(station_list):
             if index < len(rows_for_images):
-                img_path = rpath(f'./temp/elevation_profile-{station}.png')
+                img_path = rpath(f'{path}/profile_images/elevation_profile-{station}.png')
                 
                 if os.path.exists(img_path):
                     # Calcular posición
@@ -446,7 +446,7 @@ class ExcelReport:
                     )
 
         # Distancias desde el punto de medición a las estaciones monitoreadas
-        distance_img_path = rpath('./temp/distances.png')
+        distance_img_path = rpath(f'{path}/profile_images/distances.png')
         if os.path.exists(distance_img_path):
             # Calcular posición para la imagen de distancias
             left = self.general_info_sheet.range("A106").left
@@ -466,7 +466,7 @@ class ExcelReport:
         
         return copied_sheet
     
-    def fill_channel_sheet(self, site_dictionary: dict, digital_measurement_dictionary: dict, sfn_dictionary: dict):
+    def fill_channel_sheet(self, site_dictionary: dict, digital_measurement_dictionary: dict, sfn_dictionary: dict, path: str):
         # Se crea una hoja y se llena para cada canal digital medido
         for channel, dic in digital_measurement_dictionary.items():
             channel_name = f'CH{channel}'
@@ -535,12 +535,12 @@ class ExcelReport:
             
             # Rutas de las imágenes
             img_paths = {
-                'Channel Power': rpath(f'./results/{municipality}/P{point}/Soportes punto de medición/{station}/CH_{channel}_D_{service_name}/{TV_TABLE[channel]}.png'),
-                'MER': rpath(f'./results/{municipality}/P{point}/Soportes punto de medición/{station}/CH_{channel}_D_{service_name}/PLP_{plp}/{TV_TABLE[channel]}_002.png'),
-                'BER': rpath(f'./results/{municipality}/P{point}/Soportes punto de medición/{station}/CH_{channel}_D_{service_name}/PLP_{plp}/{TV_TABLE[channel]}_003.png'),
-                'Constelation': rpath(f'./results/{municipality}/P{point}/Soportes punto de medición/{station}/CH_{channel}_D_{service_name}/PLP_{plp}/{TV_TABLE[channel]}_001.png'),
-                'Echo Pattern': rpath(f'./results/{municipality}/P{point}/Soportes punto de medición/{station}/CH_{channel}_D_{service_name}/PLP_{plp}/{TV_TABLE[channel]}_008.png'),
-                'Shoulders': rpath(f'./results/{municipality}/P{point}/Soportes punto de medición/{station}/CH_{channel}_D_{service_name}/PLP_{plp}/{TV_TABLE[channel]}_010.png')
+                'Channel Power': rpath(f'{path}//Soportes punto de medición/{station}/CH_{channel}_D_{service_name}/{TV_TABLE[channel]}.png'),
+                'MER': rpath(f'{path}//Soportes punto de medición/{station}/CH_{channel}_D_{service_name}/PLP_{plp}/{TV_TABLE[channel]}_002.png'),
+                'BER': rpath(f'{path}//Soportes punto de medición/{station}/CH_{channel}_D_{service_name}/PLP_{plp}/{TV_TABLE[channel]}_003.png'),
+                'Constelation': rpath(f'{path}//Soportes punto de medición/{station}/CH_{channel}_D_{service_name}/PLP_{plp}/{TV_TABLE[channel]}_001.png'),
+                'Echo Pattern': rpath(f'{path}//Soportes punto de medición/{station}/CH_{channel}_D_{service_name}/PLP_{plp}/{TV_TABLE[channel]}_008.png'),
+                'Shoulders': rpath(f'{path}//Soportes punto de medición/{station}/CH_{channel}_D_{service_name}/PLP_{plp}/{TV_TABLE[channel]}_010.png')
             }
             
             # Celdas donde se insertarán las imágenes
@@ -580,7 +580,7 @@ class ExcelReport:
         
         return sorted_dictionary
 
-    def fill_reports(self, site_dictionary: dict, analog_measurement_dictionary: dict, digital_measurement_dictionary: dict, sfn_dictionary):
+    def fill_reports(self, site_dictionary: dict, analog_measurement_dictionary: dict, digital_measurement_dictionary: dict, sfn_dictionary, path: str):
         # Se ordenan los diccionarios de entrada por canal
         analog_measurement_dictionary = self.sort_dictionary(analog_measurement_dictionary)
         digital_measurement_dictionary = self.sort_dictionary(digital_measurement_dictionary)
@@ -593,17 +593,17 @@ class ExcelReport:
         digital_station_list = self.get_station_list(digital_measurement_dictionary)
 
         # Generación de gráficas de perfiles y distancias
-        os.makedirs(rpath('./temp'), exist_ok=True)
-        self.plot_elevation_profile(lat_point, lon_point, digital_station_list)
-        self.plot_distances_image(lat_point, lon_point, digital_station_list)
+        os.makedirs(rpath(f'{path}/profile_images'), exist_ok=True)
+        self.plot_elevation_profile(lat_point, lon_point, digital_station_list, path)
+        self.plot_distances_image(lat_point, lon_point, digital_station_list, path)
 
         # Llenado de postprocesamiento anaógico
         self.fill_register_sheet(site_dictionary, analog_measurement_dictionary)
-        self.fill_graphical_support_sheet(site_dictionary, analog_measurement_dictionary)
+        self.fill_graphical_support_sheet(site_dictionary, analog_measurement_dictionary, path)
 
         # Llenado del postprocesamiento tdt.
-        self.fill_general_info_sheet(site_dictionary, digital_measurement_dictionary)
-        self.fill_channel_sheet(site_dictionary, digital_measurement_dictionary, sfn_dictionary)
+        self.fill_general_info_sheet(site_dictionary, digital_measurement_dictionary, path)
+        self.fill_channel_sheet(site_dictionary, digital_measurement_dictionary, sfn_dictionary, path)
 
         # Eliminar hoja de plantilla del formato TDT
         self.wb_digital.sheets["Template"].delete()
@@ -613,8 +613,8 @@ class ExcelReport:
         point = str(site_dictionary['point']).zfill(2)
         
         # Rutas para guardar los archivos
-        analog_save_path = os.path.abspath(rpath(f'./results/{municipality}/P{point}/FOR_Registro Monitoreo In Situ TV Analógica_V0_P{point}.xlsm'))
-        digital_save_path = os.path.abspath(rpath(f'./results/{municipality}/P{point}/FOR_Registro Monitoreo In Situ TDT_V0_P{point}.xlsm'))
+        analog_save_path = os.path.abspath(rpath(f'{path}//FOR_Registro Monitoreo In Situ TV Analógica_V0_P{point}.xlsm'))
+        digital_save_path = os.path.abspath(rpath(f'{path}//FOR_Registro Monitoreo In Situ TDT_V0_P{point}.xlsm'))
         
         if os.path.exists(os.path.abspath(analog_save_path)):
             os.remove(analog_save_path)
@@ -625,9 +625,6 @@ class ExcelReport:
         # Guardar los workbooks
         self.wb_analog.save(analog_save_path)
         self.wb_digital.save(digital_save_path)
-        
-        # Limpiar los archivos temporales
-        shutil.rmtree(rpath('./temp'))
         
         # Opcional: cerrar los archivos si ya no se van a utilizar
         self.wb_analog.close()
@@ -643,7 +640,7 @@ if __name__ == "__main__":
     digital_measurement_dictionary = {14: {'date': '05/05/2025', 'hour': '14:53:17', 'channel_power': 66.88, 'channel_type': 'Gauss (σ = 1.0 dB)', 'PLP_0': {'SALower': 32.2113342285, 'SAUPper': 3.22442626953, 'LEVel': 56.0706126339, 'CFOFfset': -47.2, 'BROFfset': -0.1, 'PERatio': 0.0, 'BERLdpc': 0.00064, 'BBCH': 0.0, 'FERatio': 0.0, 'ESRatio': 0.0, 'GINTerval': '1/8', 'PLPCodeRate': '3/4', 'IMBalance': -6.74, 'QERRor': -1.43, 'CSUPpression': 3.2, 'MRLO': 28.665, 'MPLO': -1.416, 'MRPLp': 30.1, 'MPPLp': 3.68921748752, 'ERPLp': 2.04746810336, 'EPPLp': 42.8105424169, 'cons': '64QAM', 'FFTMode': '16k ext', 'AMPLitude': 47.624994278, 'PHASe': 2696.04211426, 'GDELay': 4.310742e-05, 'PPATtern': 'PP3', 'TS': [['CARACOL TV HD', '21', '12290', '20', 'PID', 'PCR Jitter, PCR Repetition', 'EITActual'], ['CARACOL HD 2', '22', '12290', '20', 'PID', 'PCR Jitter, PCR Repetition', 'EITActual'], ['LA KALLE', '25', '12290', '20', 'PID', 'PCR Jitter, PCR Repetition', 'EITActual']]}, 'PLP_1': {'SALower': 35.3370437622, 'SAUPper': 1.49951171875, 'LEVel': 56.1906126339, 'CFOFfset': -46.8, 'BROFfset': -0.1, 'PERatio': 0.0, 'BERLdpc': 4.1e-05, 'BBCH': 0.0, 'FERatio': 0.0, 'ESRatio': 0.0, 'GINTerval': '1/8', 'PLPCodeRate': '3/5', 'IMBalance': -14.42, 'QERRor': -2.67, 'CSUPpression': 7.3, 'MRLO': 28.397, 'MPLO': -3.201, 'MRPLp': 29.0, 'MPPLp': -2.34954610693, 'ERPLp': 3.72146490389, 'EPPLp': 131.06214613, 'cons': 'QPSK', 'FFTMode': '16k ext', 'AMPLitude': 37.6625132561, 'PHASe': 2271.78778076, 'GDELay': 6.924414e-05, 'PPATtern': 'PP3', 'TS': [['Caracol Movil', '30', 'ND', '21', 'NA', 'PCR Jitter, PCR Repetition', 'NA']]}, 'station': 'Suba', 'service_name': 'Caracol'}, 15: {'date': '05/05/2025', 'hour': '14:59:20', 'channel_power': 68.46, 'channel_type': 'Rice (σ = 1.01 dB)', 'PLP_0': {'SALower': 3.35957336426, 'SAUPper': -8.83447265625, 'LEVel': 57.5206126339, 'CFOFfset': -38.2, 'BROFfset': -0.08, 'PERatio': 0.0, 'BERLdpc': 2.4e-05, 'BBCH': 0.0, 'FERatio': 0.0, 'ESRatio': 0.0, 'GINTerval': '1/8', 'PLPCodeRate': '3/4', 'IMBalance': -1.84, 'QERRor': -0.14, 'CSUPpression': 6.7, 'MRLO': 32.771, 'MPLO': 17.828, 'MRPLp': 33.2, 'MPPLp': 9.31137625018, 'ERPLp': 1.43934437307, 'EPPLp': 22.4100490113, 'cons': '64QAM', 'FFTMode': '16k ext', 'AMPLitude': 12.4321904182, 'PHASe': 153.501724243, 'GDELay': 3.46289e-06, 'PPATtern': 'PP2', 'TS': [['RCN HD', '2', '12289', '10', 'PID', 'PCR Jitter, PCR Repetition', 'NA'], ['RCN HD 2', '3', '12289', '10', 'PID', 'PCR Jitter, PCR Repetition', 'NA']]}, 'PLP_1': {'SALower': 2.26934814453, 'SAUPper': -9.1859703064, 'LEVel': 57.5306126339, 'CFOFfset': -37.8, 'BROFfset': -0.08, 'PERatio': 0.0, 'BERLdpc': 0.0, 'BBCH': 0.0, 'FERatio': '---', 'ESRatio': 0.0, 'GINTerval': '1/8', 'PLPCodeRate': '1/2', 'IMBalance': -1.77, 'QERRor': -0.04, 'CSUPpression': 5.7, 'MRLO': 32.62, 'MPLO': 18.39, 'MRPLp': 33.0, 'MPPLp': 10.8778140409, 'ERPLp': 2.2085386747, 'EPPLp': 28.5830966719, 'cons': 'QPSK', 'FFTMode': '16k ext', 'AMPLitude': 14.0440087318, 'PHASe': 147.775810242, 'GDELay': 2.45496e-06, 'PPATtern': 'PP2', 'TS': [['RCN MOVIL', '1', '12289', '11', 'PID', 'PCR Jitter, PCR Repetition', 'NA']]}, 'station': 'Suba', 'service_name': 'RCN'}, 27: {'date': '05/05/2025', 'hour': '15:05:10', 'channel_power': 72.06, 'channel_type': 'Rice (σ = 1.28 dB)', 'PLP_1': {'SALower': 44.6417541504, 'SAUPper': -5.85527420044, 'LEVel': 62.8106126339, 'CFOFfset': -60.5, 'BROFfset': -0.13, 'PERatio': 0.0, 'BERLdpc': 0.0, 'BBCH': 0.0, 'FERatio': 0.0, 'ESRatio': 0.0, 'GINTerval': '1/16', 'PLPCodeRate': '1/2', 'IMBalance': -0.04, 'QERRor': 0.03, 'CSUPpression': 34.9, 'MRLO': 34.69, 'MPLO': 24.128, 'MRPLp': 32.6, 'MPPLp': 20.0208953643, 'ERPLp': 1.73833322581, 'EPPLp': 7.43565065218, 'cons': '16QAM', 'FFTMode': '8k ext', 'AMPLitude': 6.58491492271, 'PHASe': 31.4276857376, 'GDELay': 1.89581e-06, 'PPATtern': 'PP4', 'TS': [['Citytv', '16001', '12481', '10001', 'PID', 'PCR Jitter, PCR Repetition', 'TDT'], ['El Tiempo Television', '16002', '12481', '10001', 'PID', 'PCR Jitter, PCR Repetition', 'TDT']]}, 'station': 'Suba', 'service_name': 'CityTV'}, 16: {'date': '05/05/2025', 'hour': '15:09:47', 'channel_power': 74.98, 'channel_type': 'Rayleigh (σ = 4.85 dB)', 'PLP_101': {'SALower': 12.1987838745, 'SAUPper': 1.57965087891, 'LEVel': 64.6306126339, 'CFOFfset': -44.4, 'BROFfset': -0.09, 'PERatio': 0.0, 'BERLdpc': 0.001, 'BBCH': 0.0, 'FERatio': 0.0, 'ESRatio': 0.0, 'GINTerval': '1/8', 'PLPCodeRate': '2/3', 'IMBalance': 0.01, 'QERRor': 0.01, 'CSUPpression': 32.2, 'MRLO': 30.025, 'MPLO': 2.923, 'MRPLp': 29.9, 'MPPLp': 4.9905462419, 'ERPLp': 2.10437365804, 'EPPLp': 36.8539714661, 'cons': '64QAM', 'FFTMode': '16k ext', 'AMPLitude': 45.5582485199, 'PHASe': 503.609481812, 'GDELay': 2.246997e-05, 'PPATtern': 'PP3', 'TS': [['SEÑALCOLOMBIA', '41', '12291', '30', 'PID', 'PCR Jitter, PCR Repetition', 'NA'], ['CANAL INSTITUCIONAL', '42', '12291', '30', 'PID', 'PCR Jitter, PCR Repetition', 'NA'], ['CANAL 1', '43', '12291', '30', 'PID', 'PCR Jitter, PCR Repetition', 'NA']]}, 'station': 'Calatrava', 'service_name': 'RTVC'}, 28: {'date': '05/05/2025', 'hour': '15:12:50', 'channel_power': 74.14, 'channel_type': 'Rayleigh (σ = 5.01 dB)', 'PLP_102': {'SALower': 9.34312438965, 'SAUPper': 46.9619979858, 'LEVel': 64.4306126339, 'CFOFfset': -49.5, 'BROFfset': -0.09, 'PERatio': 0.0, 'BERLdpc': 0.011, 'BBCH': 0.0, 'FERatio': 0.0, 'ESRatio': 0.0, 'GINTerval': '1/8', 'PLPCodeRate': '2/3', 'IMBalance': -0.38, 'QERRor': 0.11, 'CSUPpression': 28.3, 'MRLO': 19.212, 'MPLO': -5.263, 'MRPLp': 23.4, 'MPPLp': 2.1124245358, 'ERPLp': 4.39765074592, 'EPPLp': 51.3322602672, 'cons': '64QAM', 'FFTMode': '16k ext', 'AMPLitude': 55.9540462494, 'PHASe': 770.477355957, 'GDELay': 1.967993e-05, 'PPATtern': 'PP3', 'TS': [['CANAL CAPITAL', '6141', '12291', '3071', 'PID', 'PCR Jitter, PCR Repetition', 'NA'], ['EUREKA - CAPITAL', '6142', '12291', '3071', 'PID', 'PCR Jitter, PCR Repetition', 'NA']]}, 'station': 'Calatrava', 'service_name': 'Canal Capital'}, 17: {'date': '05/05/2025', 'hour': '15:16:27', 'channel_power': 75.62, 'channel_type': 'Rayleigh (σ = 5.33 dB)', 'PLP_103': {'SALower': 8.71215820313, 'SAUPper': 48.4190444946, 'LEVel': 66.2106126339, 'CFOFfset': -44.8, 'BROFfset': -0.09, 'PERatio': 0.0, 'BERLdpc': 0.00093, 'BBCH': 0.0, 'FERatio': 0.0, 'ESRatio': 0.0, 'GINTerval': '1/8', 'PLPCodeRate': '2/3', 'IMBalance': -0.05, 'QERRor': -0.07, 'CSUPpression': 30.3, 'MRLO': 31.735, 'MPLO': 3.466, 'MRPLp': 30.3, 'MPPLp': 2.1124245358, 'ERPLp': 1.99251640283, 'EPPLp': 51.3322602672, 'cons': '64QAM', 'FFTMode': '16k ext', 'AMPLitude': 30.5255041122, 'PHASe': 534.927825928, 'GDELay': 1.769252e-05, 'PPATtern': 'PP3', 'TS': []}, 'station': 'Manjuí', 'service_name': 'Teveandina'}}
     sfn_dictionary = {16: {'Tibitóc': 61, 'Calatrava': 162, 'Manjuí': 252}, 17: {'Tibitóc': 61, 'Calatrava': 162, 'Manjuí': 252}, 14: {'Suba': 158, 'Manjuí': 252}, 15: {'Suba': 158, 'Manjuí': 252}}
 
-    report.fill_reports(site_dictionary, analog_measurement_dictionary, digital_measurement_dictionary, sfn_dictionary)
+    report.fill_reports(site_dictionary, analog_measurement_dictionary, digital_measurement_dictionary, sfn_dictionary, './results')
 
     # excel = win32.Dispatch("Excel.Application")
     # excel.Visible = True
