@@ -256,6 +256,9 @@ ADDITIONAL = {
     'Tx_AD1_Local':         'Az 12\n(°)',
     'Tx_DA3_CCNP':          'Az 13\n(°)',
     'Tx_DA3_RTVC':          'Az 14\n(°)',
+    'Tx_AA3_RTVC':          'Az 15\n(°)',
+    'Tx_AA3_Regional':      'Az 16\n(°)',
+    'Tx_AA3_CCNP':          'Az 17\n(°)',
 }
 
 # Diccionario de iteración para obtención de datos en la hoja 'Canalización Ppal'
