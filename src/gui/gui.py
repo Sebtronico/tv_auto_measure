@@ -2086,7 +2086,7 @@ class SummaryWindow(ctk.CTkFrame):
                 "Ángulo Actual": f"{datos.angulo_actual_rotor}°" if datos.angulo_actual_rotor is not None else "No especificado"
             })
         
-        agregar_seccion("Rotor", rotor_dict)
+            agregar_seccion("Rotor", rotor_dict)
         
         # Agregar sección de Formulario
         # if datos.formulario_datos:
