@@ -612,9 +612,15 @@ class ExcelReport:
         municipality = site_dictionary['municipality']
         point = str(site_dictionary['point']).zfill(2)
         
-        # Rutas para guardar los archivos
-        analog_save_path = os.path.abspath(rpath(f'{path}//FOR_Registro Monitoreo In Situ TV Analógica_V0_P{point}.xlsm'))
-        digital_save_path = os.path.abspath(rpath(f'{path}//FOR_Registro Monitoreo In Situ TDT_V0_P{point}.xlsm'))
+        # Obtener la ruta de la carpeta 'path'
+        path_completo = rpath(path)
+
+        # Obtener la ruta de la carpeta que contiene a 'path'
+        base_save_path = os.path.dirname(path_completo)
+
+        # Construir la ruta final usando os.path.join()
+        analog_save_path = os.path.join(base_save_path, f'FOR_Registro Monitoreo In Situ TV Analógica_V0_P{point}.xlsm')
+        digital_save_path = os.path.join(base_save_path, f'FOR_Registro Monitoreo In Situ TDT_V0_P{point}.xlsm')
         
         if os.path.exists(os.path.abspath(analog_save_path)):
             os.remove(analog_save_path)
