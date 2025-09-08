@@ -1,5 +1,6 @@
 from .InstrumentController import EtlManager, FPHManager, MSDManager, ViaviManager
 from src.utils.constants import *
+from src.utils.utils import rpath
 from collections import defaultdict
 import json
 import os
@@ -240,7 +241,7 @@ class MeasurementManager:
     @staticmethod
     def load_tv_progress(path: str, dictionary: dict):
         # Se carga el archivo de progreso
-        filename = f"{path}/savefiles/tv_progress.json"
+        filename = rpath(f"{path}/savefiles/tv_progress.json")
         with open(filename, "r") as f:
             progress = json.load(f)
             # progress = {int(k): v for k, v in progress.items()}
@@ -291,10 +292,10 @@ class MeasurementManager:
         supports_path = 'Soportes punto de medición'
 
         # Se crea la carpeta de entorno
-        os.makedirs(f'{path}/{photos_path}/Entorno', exist_ok=True)
+        os.makedirs(rpath(f'{path}/{photos_path}/Entorno', exist_ok=True))
 
         # Diccionarios de resultado
-        if os.path.exists(f"{path}/savefiles/tv_progress.json"):
+        if os.path.exists(rpath(f"{path}/savefiles/tv_progress.json")):
             dictionary, atv_result, dtv_result = self.load_tv_progress(path, dictionary)
         else:
             atv_result = {}
@@ -355,8 +356,8 @@ class MeasurementManager:
                                             f"Midiendo canal analógico {channel} ({service_name})...")
                         
                         # Definición de los nombres de las carpetas que se crean por cada canal
-                        photos_channel_path = f'{path}/{photos_path}/{station}/CH_{channel}_A_{service_name}'
-                        supports_channel_path = f'{path}/{supports_path}/{station}/CH_{channel}_A_{service_name}'
+                        photos_channel_path = rpath(f'{path}/{photos_path}/{station}/CH_{channel}_A_{service_name}')
+                        supports_channel_path = rpath(f'{path}/{supports_path}/{station}/CH_{channel}_A_{service_name}')
 
                         # Creación de las carpetas
                         os.makedirs(photos_channel_path, exist_ok=True)
@@ -399,10 +400,10 @@ class MeasurementManager:
                         
                         # Creación de carpetas
                         for channel_name in TV_SERVICES[service_name]:
-                            photos_channel_path = f'{path}/{photos_path}/{station}/CH_{channel}_D_{service_name}/{channel_name}'
+                            photos_channel_path = rpath(f'{path}/{photos_path}/{station}/CH_{channel}_D_{service_name}/{channel_name}')
                             os.makedirs(photos_channel_path, exist_ok=True)
 
-                        supports_channel_path = f'{path}/{supports_path}/{station}/CH_{channel}_D_{service_name}'
+                        supports_channel_path = rpath(f'{path}/{supports_path}/{station}/CH_{channel}_D_{service_name}')
                         os.makedirs(supports_channel_path, exist_ok=True)
 
                         # Medición
@@ -454,7 +455,7 @@ class MeasurementManager:
             self.mbk.reset()
 
             # Se crea la carpeta de soportes
-            os.makedirs(f"{path}")
+            os.makedirs(rpath(f"{path}", exist_ok=True))
 
             # El diccionario de medidas depende del modelo del instrumento
             if self.mbk.instrument_model_name == "ETL":
