@@ -24,7 +24,7 @@ def setup_logging() -> None:
     )
 
     logging.basicConfig(
-        level=logging.DEBUG,
+        level=logging.INFO, # O incluso logging.WARNING o logging.ERROR
         format="%(asctime)s [%(levelname)s] %(message)s",
         handlers=[logging.FileHandler(log_file, encoding="utf-8")]
     )
