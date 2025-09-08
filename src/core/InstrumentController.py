@@ -1079,12 +1079,12 @@ class FPHManager(InstrumentManager):
     def get_variables_for_csv(self, latitude: str, longitude: str):
         
         # Se obtiene la fecha
-        array_date = self.query_str_list_with_opc('SYST:DATE?')
-        date = f'{array_date[0]}/{array_date[1].zfill(2)}/{array_date[2].zfill(2)}'
+        today = datetime.today()
+        date = f'{today.year}/{str(today.month).zfill(2)}/{str(today.day).zfill(2)}'
 
         # Se obtiene la hora
-        array_hour = self.query_str_list_with_opc('SYST:TIME?')
-        hour = f'{array_hour[0]}:{array_hour[1].zfill(2)}:{array_hour[2].zfill(2)}'
+        now = datetime.now()
+        hour = f'{str(now.hour).zfill(2)}:{str(now.minute).zfill(2)}:{str(now.second).zfill(2)}'
 
         return [
             ['Equipo', self.full_instrument_model_name],
@@ -1117,8 +1117,7 @@ class FPHManager(InstrumentManager):
         # Configuraciones generales para todas las bandas
         self.measurement_bank_setup(band)
 
-        sweep_points = 501
-        self.write_str(f'SWE:POIN {sweep_points}')
+        sweep_points = self.query_int('SWE:POIN?')
         self.write_str(f'SWE:COUN 1') # Configuración del número de trazas
         self.write_str('DISP:TRAC1:MODE WRIT') # Configuración del modo de traza
         self.write_str('INIT:CONT OFF') # Apagado del modo de barrido continuo
@@ -1146,8 +1145,14 @@ class FPHManager(InstrumentManager):
             writer.writerow([f"{i}" for i in frequency_vector.tolist()])  # Ajusta el número de puntos según el instrumento
             
             for _ in range(100):
-                self.write_str('INIT;*WAI')
-                waveform = self.query_bin_or_ascii_float_list_with_opc('TRAC? TRACE1')
+                while True:
+                    try:
+                        self.write_str('INIT;*WAI')
+                        waveform = self.query_bin_or_ascii_float_list_with_opc('TRAC? TRACE1')
+                        break
+                    except pyvisa.errors.VisaIOError:
+                        time.sleep(0.1)
+                        continue
                 traces.append(waveform)
                 writer.writerow(waveform)
 
