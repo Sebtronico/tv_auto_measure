@@ -1416,7 +1416,7 @@ class BankInstrumentWindow(ctk.CTkFrame):
         # Agregar transductores de ejemplo
         self.vars_transductores = []
         self.transductores_widgets = []
-        transductores_ejemplo = ['TELEVES', 'CABLE TELEVES', 'BICOLOG 20300', 'CABLE BICOLOG', 'HE200', 'HL223', 'CABLE']
+        transductores_ejemplo = ['TELEVES', 'CABLE TELEVES', 'BICOLOG 20300', 'CABLE BICOLOG', 'HE400A-UWB', 'HE400P-UWB', 'HE200', 'HL223', 'CABLE']
         
         for i, transductor in enumerate(transductores_ejemplo):
             var = ctk.BooleanVar(value=False)
@@ -1536,7 +1536,7 @@ class BankInstrumentWindow(ctk.CTkFrame):
         def proceso_conexion():
              # Leer transductores seleccionados
             transductores = []
-            transductores_ejemplo = ['TELEVES', 'CABLE TELEVES', 'BICOLOG 20300', 'CABLE BICOLOG', 'HE200', 'HL223', 'CABLE']
+            transductores_ejemplo = ['TELEVES', 'CABLE TELEVES', 'BICOLOG 20300', 'CABLE BICOLOG', 'HE400A-UWB', 'HE400P-UWB', 'HE200', 'HL223', 'CABLE']
             
             for i, var in enumerate(self.vars_transductores):
                 if var.get():
@@ -1573,7 +1573,7 @@ class BankInstrumentWindow(ctk.CTkFrame):
                 # Código para conectar con el dispositivo
                 try:
                     # Creación del objeto de conexión
-                    mbk_instrument = FPHManager(ip, impedance, [])
+                    mbk_instrument = FPHManager(ip, impedance, transductores)
 
                     # Actualización de los datos compartidos
                     self.controller.datos.mbk_instrument = mbk_instrument
@@ -2220,7 +2220,7 @@ class SummaryWindow(ctk.CTkFrame):
                         measurement_dictionary = self.controller.datos.measurement_dictionary
 
                     # Para pruebas
-                    # measurement_dictionary = {'Manjuí': {'Acimuth': 254, 'Analógico': {'Canal Capital': 2}, 'Digital': {'RTVC': 16}}}
+                    measurement_dictionary = {'Manjuí': {'Acimuth': 254, 'Analógico': {'Canal Capital': 2}, 'Digital': {'RTVC': 16}}}
 
                     # Medición de TV con la barra de progreso
                     atv_result, dtv_result = measurement_manager.tv_measurement(
@@ -2262,11 +2262,11 @@ class SummaryWindow(ctk.CTkFrame):
                 
                 self.after(0, show_finish_button)
                 
-            except Exception:
+            except Exception as e:
                 # Manejar errores y mostrarlos al usuario
+                print(e)
                 error_msg = f"Error durante la medición."
                 self.lbl_estado_medicion.configure(text=error_msg)
-                CTkMessagebox(title="Error", message=error_msg, icon="error")
                 # Volver a mostrar el botón de inicio
                 self.btn_iniciar.pack(side="right", padx=10, pady=10)
 
