@@ -6,7 +6,7 @@ import json
 import os
 
 class MeasurementManager:
-    def __init__(self, dtv: EtlManager, atv: EtlManager, mbk: EtlManager|FPHManager|ViaviManager, rtr: MSDManager|None):
+    def __init__(self, dtv: EtlManager|None, atv: EtlManager|None, mbk: EtlManager|FPHManager|ViaviManager|None, rtr: MSDManager|None):
         self.dtv = dtv
         self.atv = atv
         self.mbk = mbk
@@ -292,10 +292,10 @@ class MeasurementManager:
         supports_path = 'Soportes punto de medición'
 
         # Se crea la carpeta de entorno
-        os.makedirs(rpath(f'{path}/{photos_path}/Entorno', exist_ok=True))
+        os.makedirs(f'{path}/{photos_path}/Entorno', exist_ok=True)
 
         # Diccionarios de resultado
-        if os.path.exists(rpath(f"{path}/savefiles/tv_progress.json")):
+        if os.path.exists(f"{path}/savefiles/tv_progress.json"):
             dictionary, atv_result, dtv_result = self.load_tv_progress(path, dictionary)
         else:
             atv_result = {}
@@ -455,7 +455,7 @@ class MeasurementManager:
             self.mbk.reset()
 
             # Se crea la carpeta de soportes
-            os.makedirs(rpath(f"{path}", exist_ok=True))
+            os.makedirs(f"{path}", exist_ok=True)
 
             # El diccionario de medidas depende del modelo del instrumento
             if self.mbk.instrument_model_name == "ETL":
@@ -487,25 +487,23 @@ class MeasurementManager:
     
 
 if __name__ == '__main__':
-    atv_instrument = EtlManager('172.23.82.20', 50, ['HE200'])
-    dtv_instrument = EtlManager('172.23.82.20', 75, ['TELEVES', 'CABLE TELEVES'])
-    mbk_instrument = EtlManager('172.23.82.20', 50, ['HL223'])
-    rtr_instrument = None
+    # atv_instrument = EtlManager('172.23.82.20', 50, ['HE200'])
+    # dtv_instrument = EtlManager('172.23.82.20', 75, ['TELEVES', 'CABLE TELEVES'])
+    # mbk_instrument = EtlManager('172.23.82.20', 50, ['HL223'])
+    # rtr_instrument = None
 
-    measurement_manager = MeasurementManager(atv=atv_instrument, dtv=dtv_instrument, mbk=mbk_instrument, rtr=rtr_instrument)
+    measurement_manager = MeasurementManager(atv=None, dtv=None, mbk=None, rtr=None)
 
-    sfn_dic = {16: {'Tibitóc': 61, 'Calatrava': 157, 'Manjui': 254}, 17: {'Tibitóc': 61, 'Calatrava': 157, 'Manjui': 254}, 14: {'Suba': 153, 'Manjui': 254}, 15: {'Suba': 153, 'Manjui': 254}}
+    # sfn_dic = {16: {'Tibitóc': 61, 'Calatrava': 157, 'Manjui': 254}, 17: {'Tibitóc': 61, 'Calatrava': 157, 'Manjui': 254}, 14: {'Suba': 153, 'Manjui': 254}, 15: {'Suba': 153, 'Manjui': 254}}
 
-    sfn_result = measurement_manager.sfn_measurement(sfn_dic, './tests', 0)
-    print(sfn_result)
+    # sfn_result = measurement_manager.sfn_measurement(sfn_dic, './tests', 0)
+    # print(sfn_result)
 
     diccionario_medicion = {
-        'Asignado Sin Estación': {'Acimuth': 0, 'Analógico': {}, 'Digital': {}},
         'Tibitóc': {'Acimuth': 61, 'Analógico': {'Canal 1': 3, 'Canal Institucional': 6, 'Señal Colombia': 12}, 'Digital': {}},
         'Suba': {'Acimuth': 153, 'Analógico': {'RCN': 8, 'Caracol': 10, 'CityTV': 21}, 'Digital': {'CityTV': 27}},
         'Calatrava': {'Acimuth': 157, 'Analógico': {'Teveandina': 23, 'Señal Colombia': 25, 'Canal Capital': 32, 'Canal 1': 36, 'Canal Institucional': 38}, 'Digital': {'Canal Capital': 28}},
         'Manjui': {'Acimuth': 254, 'Analógico': {'Canal Capital': 2, 'RCN': 4, 'Caracol': 5, 'Canal 1': 7, 'Canal Institucional': 9, 'Señal Colombia': 11}, 'Digital': {'Caracol': 14, 'RCN': 15, 'RTVC': 16, 'Teveandina': 17}}}
-        # 'Manjui': {'Acimuth': 254, 'Analógico': {'Canal Capital': 2}, 'Digital': {'RTVC': 16}}}
 
     # atv_dic, dtv_dic = measurement_manager.tv_measurement(diccionario_medicion, 0, './tests')
     # print('Diccionario analógico')
