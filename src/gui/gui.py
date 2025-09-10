@@ -646,15 +646,19 @@ class MainWindow(ctk.CTk):
         self.frames = {}
         
         # Crear todas las páginas
+        self.crear_paginas()
+        
+        # Mostrar la primera página
+        self.mostrar_ventana(MeasurementModeWindow)
+    
+    def crear_paginas(self):
+        """Crea e inicializa todas las páginas (frames) de la aplicación."""
         for F in (MeasurementModeWindow, LoadExcelWindow, ATVInstrumentWindow, TDTInstrumentWindow, BankInstrumentWindow, 
                   RotorWindow, SiteInfoWindow, SummaryWindow):
             frame = F(self.container, self)
             self.frames[F] = frame
             frame.grid(row=0, column=0, sticky="nsew")
-        
-        # Mostrar la primera página
-        self.mostrar_ventana(MeasurementModeWindow)
-    
+
     def mostrar_ventana(self, cont):
         """Trae al frente la ventana especificada"""
         frame = self.frames[cont]
@@ -662,6 +666,21 @@ class MainWindow(ctk.CTk):
         # Actualizar la ventana al mostrarla
         if hasattr(frame, 'actualizar'):
             frame.actualizar()
+
+    def reiniciar_asistente(self):
+        """Reinicia el asistente para una nueva medición."""
+        # Reiniciar datos
+        self.datos = DatosCompartidos()
+
+        # Destruir y recrear todos los frames
+        for frame in self.frames.values():
+            frame.destroy()
+        self.frames.clear()
+
+        self.crear_paginas()
+
+        # Volver a la primera ventana
+        self.mostrar_ventana(MeasurementModeWindow)
 
 class MeasurementModeWindow(ctk.CTkFrame):
     def __init__(self, parent, controller):
@@ -2286,31 +2305,10 @@ class SummaryWindow(ctk.CTkFrame):
         
         if respuesta.get() == "Sí":
             # Reiniciar el asistente
-            self.reiniciar()
+            self.controller.reiniciar_asistente()
         else:
             # Cerrar la aplicación
             self.controller.quit()
-    
-    def reiniciar(self):
-        """Reiniciar el asistente para una nueva medición"""
-        # Reiniciar datos
-        self.controller.datos = DatosCompartidos()
-        
-        # Ocultar componentes de medición
-        self.progreso.pack_forget()
-        self.lbl_estado_medicion.pack_forget()
-        self.btn_finalizar.pack_forget()
-        
-        # Ocultar segunda barra de progreso si existe
-        if hasattr(self, 'progreso_mbk'):
-            self.progreso_mbk.pack_forget()
-            self.lbl_estado_medicion_mbk.pack_forget()
-        
-        # Mostrar botón de inicio
-        self.btn_iniciar.pack(side="right", padx=10, pady=10)
-        
-        # Volver a la primera ventana
-        self.controller.mostrar_ventana(LoadExcelWindow)
 
 # Función para iniciar la aplicación
 def iniciar_aplicacion():
