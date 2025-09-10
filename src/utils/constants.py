@@ -33,7 +33,10 @@ PLP_SERVICES = {
     'Teleislas':	[0],
     'Canal Capital':[102],
     'Telepasto':	[0],
-    'Telepacífico':	[105]
+    'Telepacífico':	[105],
+    'CaliTV':       [0],
+    'U. Pacífico':  [0],
+    'TV Ipiales':   [1]
 }
 
 # Diccionario de las variables que se leen en cada modo de medida en tv digital
@@ -356,5 +359,9 @@ TV_SERVICES = {
     'Teleislas':	['Teleislas',       'Raizal TV'],
     'Canal Capital':['Canal Capital',   'Eureka Capital'],
     'Telepasto':	['Telepasto'],
-    'Telepacífico':	['Telepacífico HD', 'Origen Channel']
+    'Telepacífico':	['Telepacífico HD', 'Origen Channel'],
+    'CaliTV:':      ['Cali TV', 'Univalle TV'],
+    'U. Pacífico':  ['Yubarta TV'],
+    'TV Ipiales':   ['TV Ipiales HD', 'TV Ipiales+']
+
 }
