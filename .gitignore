@@ -246,6 +246,7 @@ $RECYCLE.BIN/
 *.msm
 *.msp
 *.tif
+*.dll
 ~$*
 *Zone.Identifier
 
