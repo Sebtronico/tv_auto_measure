@@ -261,19 +261,32 @@ class MeasurementManager:
         for station, info in dictionary.items():
             # Copias de los subdiccionarios para ir filtrando
             ang = {}
-            for service, channel in info['Analógico'].items():
-                if channel not in alrd_ang:
-                    ang[service] = channel
-                elif station_ang.get(channel) != station:
-                    # El canal existe pero se midió desde otra estación
-                    ang[service] = channel
+            # Itera sobre los servicios y sus listas de canales analógicos
+            for service, channel_list in info['Analógico'].items():
+                pending_channels = []
+                for channel in channel_list:
+                    # Se añade el canal a la lista de pendientes si no ha sido medido,
+                    # o si fue medido desde una estación diferente (caso SFN)
+                    if channel not in alrd_ang or station_ang.get(channel) != station:
+                        pending_channels.append(channel)
+                
+                # Si hay canales pendientes para este servicio, se añaden al diccionario 'ang'
+                if pending_channels:
+                    ang[service] = pending_channels
 
             dig = {}
-            for service, channel in info['Digital'].items():
-                if channel not in alrd_dig:
-                    dig[service] = channel
-                elif station_dig.get(channel) != station:
-                    dig[service] = channel
+            # Itera sobre los servicios y sus listas de canales digitales
+            for service, channel_list in info['Digital'].items():
+                pending_channels = []
+                for channel in channel_list:
+                    # Se añade el canal a la lista de pendientes si no ha sido medido,
+                    # o si fue medido desde una estación diferente (caso SFN)
+                    if channel not in alrd_dig or station_dig.get(channel) != station:
+                        pending_channels.append(channel)
+
+                # Si hay canales pendientes para este servicio, se añaden al diccionario 'dig'
+                if pending_channels:
+                    dig[service] = pending_channels
 
             # Guardar la estación sólo si queda algo por medir
             if ang or dig:
@@ -347,90 +360,92 @@ class MeasurementManager:
                                     f"Rotación completada. Preparando mediciones para {station}...")
                 
                 # Medición de los canales analógicos para cada estación
-                for service_name, channel in analog_measurement.items():
-                    while True:  # Bucle para repetir la medición si es necesario
-                        # self.atv.reconnect()
-                        # Reportar progreso antes de medir
-                        if callback_progress:
-                            callback_progress(current_operation, total_operations, 
-                                            f"Midiendo canal analógico {channel} ({service_name})...")
-                        
-                        # Definición de los nombres de las carpetas que se crean por cada canal
-                        photos_channel_path = rpath(f'{path}/{photos_path}/{station}/CH_{channel}_A_{service_name}')
-                        supports_channel_path = rpath(f'{path}/{supports_path}/{station}/CH_{channel}_A_{service_name}')
-
-                        # Creación de las carpetas
-                        os.makedirs(photos_channel_path, exist_ok=True)
-                        os.makedirs(supports_channel_path, exist_ok=True)
-
-                        # Medición
-                        atv_channel_result = self.atv.atv_measurement(channel, supports_channel_path)
-                        atv_channel_result.update({'station': station, 'service_name': service_name})
-
-                        # Se añade al diccionario de resultado
-                        atv_result[channel] = atv_channel_result
-                        
-                        # Incrementar operación y reportar progreso
-                        current_operation += 1
-                        if callback_progress:
-                            callback_progress(current_operation, total_operations, 
-                                            f"Medición de canal analógico {channel} ({service_name}) completada.")
-                        
-                        # Solicitar confirmación al usuario
-                        if callback_confirm:
-                            confirm_result = callback_confirm(f"Canal analógico {channel} ({service_name})")
-                            if confirm_result:  # Si el usuario confirma, salimos del bucle while
-                                break
-                            # Si no confirma, se repite el ciclo pero no incrementamos el contador
-                            current_operation -= 1  # Restamos porque vamos a repetir la operación
+                for service_name, channel_list in analog_measurement.items():
+                    for channel in channel_list:
+                        while True:  # Bucle para repetir la medición si es necesario
+                            # self.atv.reconnect()
+                            # Reportar progreso antes de medir
                             if callback_progress:
                                 callback_progress(current_operation, total_operations, 
-                                                f"Repitiendo medición del canal analógico {channel} ({service_name})...")
-                        else:
-                            break  # Si no hay callback de confirmación, salimos del bucle
+                                                f"Midiendo canal analógico {channel} ({service_name})...")
+                            
+                            # Definición de los nombres de las carpetas que se crean por cada canal
+                            photos_channel_path = rpath(f'{path}/{photos_path}/{station}/CH_{channel}_A_{service_name}')
+                            supports_channel_path = rpath(f'{path}/{supports_path}/{station}/CH_{channel}_A_{service_name}')
+
+                            # Creación de las carpetas
+                            os.makedirs(photos_channel_path, exist_ok=True)
+                            os.makedirs(supports_channel_path, exist_ok=True)
+
+                            # Medición
+                            atv_channel_result = self.atv.atv_measurement(channel, supports_channel_path)
+                            atv_channel_result.update({'station': station, 'service_name': service_name})
+
+                            # Se añade al diccionario de resultado
+                            atv_result[channel] = atv_channel_result
+                            
+                            # Incrementar operación y reportar progreso
+                            current_operation += 1
+                            if callback_progress:
+                                callback_progress(current_operation, total_operations, 
+                                                f"Medición de canal analógico {channel} ({service_name}) completada.")
+                            
+                            # Solicitar confirmación al usuario
+                            if callback_confirm:
+                                confirm_result = callback_confirm(f"Canal analógico {channel} ({service_name})")
+                                if confirm_result:  # Si el usuario confirma, salimos del bucle while
+                                    break
+                                # Si no confirma, se repite el ciclo pero no incrementamos el contador
+                                current_operation -= 1  # Restamos porque vamos a repetir la operación
+                                if callback_progress:
+                                    callback_progress(current_operation, total_operations, 
+                                                    f"Repitiendo medición del canal analógico {channel} ({service_name})...")
+                            else:
+                                break  # Si no hay callback de confirmación, salimos del bucle
 
                 # Medición de los canales digitales para cada estación
-                for service_name, channel in digital_measurement.items():
-                    while True:  # Bucle para repetir la medición si es necesario
-                        # self.dtv.reconnect()
-                        # Reportar progreso antes de medir
-                        if callback_progress:
-                            callback_progress(current_operation, total_operations, 
-                                            f"Midiendo canal digital {channel} ({service_name})...")
-                        
-                        # Creación de carpetas
-                        for channel_name in TV_SERVICES[service_name]:
-                            photos_channel_path = rpath(f'{path}/{photos_path}/{station}/CH_{channel}_D_{service_name}/{channel_name}')
-                            os.makedirs(photos_channel_path, exist_ok=True)
-
-                        supports_channel_path = rpath(f'{path}/{supports_path}/{station}/CH_{channel}_D_{service_name}')
-                        os.makedirs(supports_channel_path, exist_ok=True)
-
-                        # Medición
-                        dtv_channel_result = self.dtv.dtv_measurement(channel, supports_channel_path, service_name)
-                        dtv_channel_result.update({'station': station, 'service_name': service_name})
-
-                        # Se añade al diccionario de resultado
-                        dtv_result[channel] = dtv_channel_result
-                        
-                        # Incrementar operación y reportar progreso
-                        current_operation += 1
-                        if callback_progress:
-                            callback_progress(current_operation, total_operations, 
-                                            f"Medición de canal digital {channel} ({service_name}) completada.")
-                        
-                        # Solicitar confirmación al usuario
-                        if callback_confirm:
-                            confirm_result = callback_confirm(f"Canal digital {channel} ({service_name})")
-                            if confirm_result:  # Si el usuario confirma, salimos del bucle while
-                                break
-                            # Si no confirma, se repite el ciclo pero no incrementamos el contador
-                            current_operation -= 1  # Restamos porque vamos a repetir la operación
+                for service_name, channel_list in digital_measurement.items():
+                    for channel in channel_list:
+                        while True:  # Bucle para repetir la medición si es necesario
+                            # self.dtv.reconnect()
+                            # Reportar progreso antes de medir
                             if callback_progress:
                                 callback_progress(current_operation, total_operations, 
-                                                f"Repitiendo medición del canal digital {channel} ({service_name})...")
-                        else:
-                            break  # Si no hay callback de confirmación, salimos del bucle
+                                                f"Midiendo canal digital {channel} ({service_name})...")
+                            
+                            # Creación de carpetas
+                            for channel_name in TV_SERVICES[service_name]:
+                                photos_channel_path = rpath(f'{path}/{photos_path}/{station}/CH_{channel}_D_{service_name}/{channel_name}')
+                                os.makedirs(photos_channel_path, exist_ok=True)
+
+                            supports_channel_path = rpath(f'{path}/{supports_path}/{station}/CH_{channel}_D_{service_name}')
+                            os.makedirs(supports_channel_path, exist_ok=True)
+
+                            # Medición
+                            dtv_channel_result = self.dtv.dtv_measurement(channel, supports_channel_path, service_name)
+                            dtv_channel_result.update({'station': station, 'service_name': service_name})
+
+                            # Se añade al diccionario de resultado
+                            dtv_result[channel] = dtv_channel_result
+                            
+                            # Incrementar operación y reportar progreso
+                            current_operation += 1
+                            if callback_progress:
+                                callback_progress(current_operation, total_operations, 
+                                                f"Medición de canal digital {channel} ({service_name}) completada.")
+                            
+                            # Solicitar confirmación al usuario
+                            if callback_confirm:
+                                confirm_result = callback_confirm(f"Canal digital {channel} ({service_name})")
+                                if confirm_result:  # Si el usuario confirma, salimos del bucle while
+                                    break
+                                # Si no confirma, se repite el ciclo pero no incrementamos el contador
+                                current_operation -= 1  # Restamos porque vamos a repetir la operación
+                                if callback_progress:
+                                    callback_progress(current_operation, total_operations, 
+                                                    f"Repitiendo medición del canal digital {channel} ({service_name})...")
+                            else:
+                                break  # Si no hay callback de confirmación, salimos del bucle
 
             except Exception as e:
                 # Cualquier error que ocurra durante la medición, el progreso se guarda

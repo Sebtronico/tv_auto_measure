@@ -920,8 +920,9 @@ class LoadExcelWindow(ctk.CTkFrame):
                 lbl_analogico.pack(pady=(2,2), padx=10, anchor="w")
                 
                 # Mostrar canales analógicos
-                for servicio, canal in datos['Analógico'].items():
-                    lbl_canal = ctk.CTkLabel(frame_analogico, text=f"{servicio}: Canal {canal}")
+                for servicio, canal_list in datos['Analógico'].items():
+                    channel_list_str = ", ".join(str(channel) for channel in canal_list)
+                    lbl_canal = ctk.CTkLabel(frame_analogico, text=f"{servicio}: Canal {channel_list_str}")
                     lbl_canal.pack(pady=1, padx=30, anchor="w")
             
             # Sección Digital
@@ -934,8 +935,9 @@ class LoadExcelWindow(ctk.CTkFrame):
                 lbl_digital.pack(pady=(2,2), padx=10, anchor="w")
                 
                 # Mostrar canales digitales
-                for servicio, canal in datos['Digital'].items():
-                    lbl_canal = ctk.CTkLabel(frame_digital, text=f"{servicio}: Canal {canal}")
+                for servicio, canal_list in datos['Digital'].items():
+                    channel_list_str = ", ".join(str(channel) for channel in canal_list)
+                    lbl_canal = ctk.CTkLabel(frame_digital, text=f"{servicio}: Canal {channel_list_str}")
                     lbl_canal.pack(pady=1, padx=30, anchor="w")
 
         # Sección de Canales SFN
@@ -2239,7 +2241,7 @@ class SummaryWindow(ctk.CTkFrame):
                         measurement_dictionary = self.controller.datos.measurement_dictionary
 
                     # Para pruebas
-                    measurement_dictionary = {'Manjuí': {'Acimuth': 254, 'Analógico': {'Canal Capital': 2}, 'Digital': {'RTVC': 16}}}
+                    # measurement_dictionary = {'Manjuí': {'Acimuth': 254, 'Analógico': {'Canal Capital': 2}, 'Digital': {'RTVC': 16}}}
 
                     # Medición de TV con la barra de progreso
                     atv_result, dtv_result = measurement_manager.tv_measurement(

@@ -269,17 +269,23 @@ SEARCH_PRINCIPALS = {
     'Analógico': {
         'Estación Públicos TV Analógica': {
             'C1': 'Canal 1',
+            'C1_Operativo': 'Canal 1',
             'CI': 'Canal Institucional',
+            'CI_Operativo': 'Canal Institucional',
             'SC': 'Señal Colombia',
+            'SC_Operativo': 'Señal Colombia'
         },
 
         'Estación Regional TV Analógica': {
             'CR': 'Canal Regional',
+            'CR_Operativo': 'Canal Regional'
         },
 
         'Estación Privados TV Analógica': {
             'RCN': 'RCN',
+            'RCN_Operativo': 'RCN',
             'CRC': 'Caracol',
+            'CRC_Operativo': 'Caracol',
         },
     },
 
@@ -301,25 +307,32 @@ SEARCH_ADDITIONALS = {
     'Analógico': {
         'Estación Públicos TV Analógica': {
             'C1': 'Canal 1',
+            'C1_Operativo': 'Canal 1',
             'CI': 'Canal Institucional',
+            'CI_Operativo': 'Canal Institucional',
             'SC': 'Señal Colombia',
+            'SC_Operativo': 'Señal Colombia'
         },
 
         'Estación Regional TV Analógica': {
             'CR': 'Canal Regional',
+            'CR_Operativo': 'Canal Regional'
         },
 
         'Estación Privados TV Analógica': {
             'RCN': 'RCN',
+            'RCN_Operativo': 'RCN',
             'CRC': 'Caracol',
+            'CRC_Operativo': 'Caracol',
         },
 
         'Estación 2do_CR': {
-            '2do_CR': 'Regional 2'
+            '2do_CR': 'Regional 2',
+            '2doCR\nOperativo': 'Regional 2'
         },
 
         'Estación Analógica Canal Local': {
-            'CH_Local1': 'Local_1_Analógica'
+            'CH_Local1': 'Local_1_Analógica',
         }
     },
 

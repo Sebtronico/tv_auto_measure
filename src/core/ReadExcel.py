@@ -143,34 +143,43 @@ class ReadExcel:
         for tec in search.keys(): # Análogo o Digital
             if tec in ['Analógico', 'Digital']:
                 for station_column in search[tec].keys(): # Estación Públicos TV Analógica
-                    for service in search[tec][station_column].keys(): # C1, CI, SC
+                    for service_col_name in search[tec][station_column].keys(): # C1, CI, SC
                         for index in indexes:
                             station = str(dataframe.at[index, station_column]).title()
-                            if search[tec][station_column][service] == 'Regional Municipio':
+                            if search[tec][station_column][service_col_name] == 'Regional Municipio':
                                 channel = dataframe.at[index, 'Regional Municipio']
 
-                            elif search[tec][station_column][service] == 'Canal Regional':
+                            elif search[tec][station_column][service_col_name] == 'Canal Regional':
                                 channel = dataframe.at[index, 'Operador Regional']
 
-                            elif search[tec][station_column][service] == 'Regional 2':
+                            elif search[tec][station_column][service_col_name] == 'Regional 2':
                                 channel = dataframe.at[index, 'Segundo Operador Regional']
 
-                            elif search[tec][station_column][service] == 'Regional 2 TDT':
+                            elif search[tec][station_column][service_col_name] == 'Regional 2 TDT':
                                 channel = dataframe.at[index, 'Segundo Operador Regional TDT']
 
-                            elif search[tec][station_column][service] == 'Local_1_Analógica':
+                            elif search[tec][station_column][service_col_name] == 'Local_1_Analógica':
                                 channel = dataframe.at[index, 'Local_1']
 
-                            elif search[tec][station_column][service] == 'Local TDT':
+                            elif search[tec][station_column][service_col_name] == 'Local TDT':
                                 channel = dataframe.at[index, 'Local_TDT']
 
                             else:
-                                channel = search[tec][station_column][service]
+                                channel = search[tec][station_column][service_col_name]
 
                             if station in stations:
                                 try:
-                                    dictionary[station][tec].update({channel: int(dataframe.at[index, service])})
+                                    channel_number = int(dataframe.at[index, service_col_name])
+                                    # Si el servicio (ej. 'Teveandina') ya existe para la estación.
+                                    if channel in dictionary[station][tec]:
+                                        # Se añade el número de canal solo si no está ya en la lista.
+                                        if channel_number not in dictionary[station][tec][channel]:
+                                            dictionary[station][tec][channel].append(channel_number)
+                                    else:
+                                        # Si el servicio no existe, se crea con una lista que contiene el canal.
+                                        dictionary[station][tec][channel] = [channel_number]
                                 except ValueError:
+                                    # Si el valor no es un número (ND, SNA, BVI), se ignora.
                                     continue
             else:
                 pass
@@ -222,6 +231,8 @@ class ReadExcel:
                                 break
                             except ValueError:
                                 continue
+                    except KeyError:
+                        continue
                     except AttributeError:
                         continue
 
@@ -247,11 +258,10 @@ class ReadExcel:
         # Actualizar acimuth si es la primera vez que se añade o si es diferente
         station_data['Acimuth'] = acimuth
 
-        # Actualizar la tecnología específica
-        if tec == 'Analógico':
-            station_data['Analógico'].update({service: channel})
-        elif tec == 'Digital':
-            station_data['Digital'].update({service: channel})
+        if service in station_data[tec].keys():
+            station_data[tec][service].append(channel)
+        else:
+            station_data[tec].update({service: [channel]})
 
         return self.sort_dictionary(dictionary)
 
@@ -325,10 +335,12 @@ class ReadExcel:
             technologies = {k: v for k, v in info.items() if k != 'Acimuth'}
 
             if 'Digital' in technologies:
-                for number in technologies['Digital'].values():
-                    if number not in digital_channels:
-                        digital_channels[number] = {}
-                    digital_channels[number][station] = acimuth
+                # El valor es ahora una lista de números, así que iteramos a través de ella.
+                for numbers_list in technologies['Digital'].values():
+                    for number in numbers_list:
+                        if number not in digital_channels:
+                            digital_channels[number] = {}
+                        digital_channels[number][station] = acimuth
 
         # Ordenar cada subdiccionario por acimuth de menor a mayor
         sorted_channels = {
@@ -365,12 +377,12 @@ class ReadExcel:
             canales_a_eliminar = []
             
             # Revisamos cada canal en el diccionario Digital
-            for operador, canal in digital.items():
-                # Si el canal está en el diccionario de elección
-                if canal in diccionario_eleccion:
-                    # Si la estación actual no es la elegida para este canal
-                    if diccionario_eleccion[canal] != estacion:
-                        # Marcamos el canal para eliminar
+            for operador, canales in digital.items():
+                # Iteramos sobre la lista de canales
+                for canal_num in canales:
+                    # Si el canal está en el diccionario de elección y la estación no es la elegida
+                    if canal_num in diccionario_eleccion and diccionario_eleccion[canal_num] != estacion:
+                        # Marcamos el operador para eliminarlo (evita modificar el diccionario mientras se itera)
                         canales_a_eliminar.append(operador)
             
             # Eliminamos los canales marcados
@@ -396,11 +408,11 @@ class ReadExcel:
         return excel_station_list
     
 if __name__ == '__main__':
-    filename = './tests/Preingenieria Cundinamarca.xlsx'
+    filename = './tests/Preingeniería_Bogota.xlsx'
     excel = ReadExcel(filename)
 
 
-    municipio = 'Subachoque'
+    municipio = 'Bogotá Norte'
     punto = 1
 
     # print(excel.get_dane_code(municipio))
@@ -409,10 +421,16 @@ if __name__ == '__main__':
     dictionary = excel.get_dictionary(municipio, punto)
     print(dictionary)
 
+    # new_station = {'station': 'Manjui', 'tecnologia': 'Digital', 'acimuth': 120, 'channel': 45, 'service': 'Caracol'}
+
+    # dictionary = excel.add_station(dictionary, new_station)
+    # print('\n')
+    # print(dictionary)
     # sfn = excel.get_sfn(dictionary)
     # print(sfn)
 
-    # seleccion = {16: 'Manjui', 17: 'Manjui', 14: 'Manjui', 15: 'Manjui'}
+    # seleccion = {17: 'Gabinete', 18: 'Pitalito'}
 
     # dictionary2 = excel.update_sfn(dictionary, seleccion)
+    # print('\n')
     # print(dictionary2)
